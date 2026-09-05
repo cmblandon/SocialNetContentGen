@@ -88,21 +88,21 @@
 
 ## 6. Phase 6 — content-admin-panel (Next.js)
 
-- [ ] 6.1 Scaffold the Next.js app in a new top-level `frontend/` directory, pointing at the FastAPI service from previous phases
-- [ ] 6.2 Decide and implement the minimal shared-credential auth gate for the panel (per design Open Question — single shared token or basic auth; document the choice)
-- [ ] 6.3 Write failing frontend tests for the Approval Queue view (source document, story summary, chapter script, all platform versions, approve/reject actions) — per `specs/content-admin-panel/spec.md`
-- [ ] 6.4 Implement the Approval Queue view against the Phase 3 approve/reject endpoints to make 6.3 pass
-- [ ] 6.5 Write failing frontend tests for the Editorial Calendar view (published/scheduled items by network and time)
-- [ ] 6.6 Implement the Calendar view against the Phase 5 `GET /publish-records` endpoint to make 6.5 pass
-- [ ] 6.7 Write failing frontend tests for the Covered Cases view (search, browse, manual edit of `/casos_cubiertos.md` entries)
-- [ ] 6.8 Write failing backend tests for the endpoints the Covered Cases view needs (`GET /cases`, `PATCH /cases/{id}`)
-- [ ] 6.9 Implement the `GET /cases` / `PATCH /cases/{id}` endpoints to make 6.8 pass
-- [ ] 6.10 Implement the Covered Cases view against those endpoints to make 6.7 pass
-- [ ] 6.11 Review and Update Existing Unit Tests (MANDATORY) — both backend and frontend
-- [ ] 6.12 Run Unit Tests and Verify Database State (MANDATORY) — report at `openspec/changes/archivo-desclasificado-pipeline/reports/<YYYY-MM-DD>-step-6.12-unit-test-and-db-verification.md`
-- [ ] 6.13 Manual Endpoint Testing with curl (MANDATORY — AGENT MUST EXECUTE): exercise `GET /cases` and `PATCH /cases/{id}` (verify update, then restore original values), document commands/responses in the phase report
-- [ ] 6.14 E2E Testing with Playwright MCP (MANDATORY — AGENT MUST EXECUTE): start frontend and backend, navigate to the panel, run the full approve-then-see-in-calendar workflow and the covered-cases search/edit workflow, verify data persistence matches backend state, restore any test data created, document scenarios and outcomes in the phase report
-- [ ] 6.15 Update Technical Documentation (MANDATORY): document how to run the admin panel locally against the backend
+- [x] 6.1 Scaffold the Next.js app in a new top-level `frontend/` directory, pointing at the FastAPI service from previous phases (Next.js 16 + TypeScript + App Router, `src/` dir; Jest + React Testing Library for unit tests, Playwright for E2E, per `docs/frontend-standards.md`). Note: Next.js 16 renamed `middleware.ts` to `proxy.ts` — the auth gate in 6.2 uses the new convention.
+- [x] 6.2 Decide and implement the minimal shared-credential auth gate for the panel (per design Open Question — single shared token or basic auth; document the choice). Decided: single shared token (not basic auth — avoids browser basic-auth caching/logout quirks for a small internal tool), stored in `ADMIN_PANEL_TOKEN`, exchanged for an httpOnly session cookie via `POST /api/login`, enforced by `src/proxy.ts` (Next.js 16's renamed `middleware.ts`). No dedicated automated test — Next 16's proxy unit-testing support is explicitly experimental (`unstable_doesProxyMatch`); verified via `npm run build` (proxy compiles and is wired) and will be exercised live during the Playwright E2E pass (6.14).
+- [x] 6.3 Write failing frontend tests for the Approval Queue view (source document, story summary, chapter script, all platform versions, approve/reject actions) — per `specs/content-admin-panel/spec.md`
+- [x] 6.4 Implement the Approval Queue view against the Phase 3 approve/reject endpoints to make 6.3 pass. Also added `GET /chapters/pending` (backend) — the approve/reject endpoints alone don't expose the read context (source document, story summary, script, all platform versions) the spec requires the queue to display; not itemized separately above but required to build this view at all.
+- [x] 6.5 Write failing frontend tests for the Editorial Calendar view (published/scheduled items by network and time)
+- [x] 6.6 Implement the Calendar view against the Phase 5 `GET /publish-records` endpoint to make 6.5 pass
+- [x] 6.7 Write failing frontend tests for the Covered Cases view (search, browse, manual edit of `/casos_cubiertos.md` entries)
+- [x] 6.8 Write failing backend tests for the endpoints the Covered Cases view needs (`GET /cases`, `PATCH /cases/{id}`)
+- [x] 6.9 Implement the `GET /cases` / `PATCH /cases/{id}` endpoints to make 6.8 pass
+- [x] 6.10 Implement the Covered Cases view against those endpoints to make 6.7 pass
+- [x] 6.11 Review and Update Existing Unit Tests (MANDATORY) — both backend and frontend. 194 backend + 10 frontend tests pass, no regressions.
+- [x] 6.12 Run Unit Tests and Verify Database State (MANDATORY) — report at `openspec/changes/archivo-desclasificado-pipeline/reports/<YYYY-MM-DD>-step-6.12-unit-test-and-db-verification.md`
+- [x] 6.13 Manual Endpoint Testing with curl (MANDATORY — AGENT MUST EXECUTE): exercise `GET /cases` and `PATCH /cases/{id}` (verify update, then restore original values), document commands/responses in the phase report
+- [x] 6.14 E2E Testing (MANDATORY — AGENT MUST EXECUTE): no Playwright MCP browser tool was available in this environment, so used the project's own installed `@playwright/test` runner (real headless Chromium) via CLI instead — same substantive requirement (agent-executed, real-browser verification), standard mechanism per `docs/frontend-standards.md`. Ran the full approve-then-see-in-calendar workflow and the covered-cases search/edit workflow against real, running frontend+backend servers; found and fixed a real CORS gap plus two test-setup bugs; restored all test data. See the phase report for full detail.
+- [x] 6.15 Update Technical Documentation (MANDATORY): document how to run the admin panel locally against the backend
 
 ## 7. Final Wrap-up
 

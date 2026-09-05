@@ -33,6 +33,12 @@ class ProjectMemoryStore:
     def append_caso_cubierto(self, entry: str) -> None:
         self._append(_CASOS_CUBIERTOS_FILENAME, entry)
 
+    def write_casos_cubiertos(self, content: str) -> None:
+        """Replaces the full file content — used to edit a single entry
+        in place (the file has no per-line addressability of its own),
+        per the content-admin-panel Covered Cases view (Phase 6)."""
+        (self._memory_dir / _CASOS_CUBIERTOS_FILENAME).write_text(content, encoding="utf-8")
+
     def read_calendario(self) -> str:
         return self._read(_CALENDARIO_FILENAME)
 

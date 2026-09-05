@@ -305,7 +305,54 @@ gate, use `orchestrator.run_cycle` with a real, already-persisted `Document`.
 ### Running the editorial database migrations
 
 ```bash
-alembic upgrade head    # create the editorial schema
-alembic downgrade base  # revert it
+# Must be `python3 -m alembic`, not bare `alembic` — the latter doesn't
+# have the project root on sys.path and fails importing the models.
+python3 -m alembic upgrade head    # create the editorial schema
+python3 -m alembic downgrade base  # revert it
 ```
+
+## Editorial Admin Panel (`frontend/` — Next.js)
+
+The Phase 6 admin panel: an internal, single-operator UI for the
+human-approval queue, the editorial calendar, and covered-cases management.
+See `docs/frontend-standards.md` for the full architecture and standards;
+this section is the local-dev walkthrough.
+
+### Running it locally against the backend
+
+```bash
+# 1. Backend: apply migrations and start the API (from the project root)
+source venv/bin/activate
+python3 -m alembic upgrade head
+uvicorn src.editorial.presentation.app:app --reload   # http://localhost:8000
+
+# 2. Frontend: configure and start the dev server (in a second terminal)
+cd frontend
+npm install
+cp .env.local.example .env.local   # set ADMIN_PANEL_TOKEN to any value
+npm run dev                         # http://localhost:3000
+```
+
+Open `http://localhost:3000`, you'll be redirected to `/login` — enter the
+`ADMIN_PANEL_TOKEN` value from `.env.local`.
+
+### Running the frontend's own tests
+
+```bash
+cd frontend
+npm test          # Jest unit tests (components, mocked API)
+npm run test:e2e  # Playwright E2E — needs both servers running (above)
+                   # AND seeded data: a pending chapter, an
+                   # optimal_time:<platform>=HH:MM line in calendario.md,
+                   # and a couple of casos_cubiertos.md entries. See
+                   # docs/frontend-standards.md's Testing Standards for
+                   # the exact seed shape the two specs assume.
+```
+
+### CORS
+
+The backend allows `http://localhost:3000` via `CORSMiddleware`
+(`src/editorial/presentation/app.py`) — without it, every browser request
+from the frontend to the API fails outright. If you run the frontend on a
+different port/host, add it to `allow_origins` there.
 

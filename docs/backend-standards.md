@@ -156,9 +156,15 @@ collapse these three concerns into one class.
   approve/reject transitions).
 - **Errors**: raise `fastapi.HTTPException` with a clear `detail`; don't let
   raw exceptions leak past a route handler.
-- **No response envelope convention has been established yet** — decide it
-  when the first real (non-`/health`) endpoint is built, and document the
-  choice here.
+- **Response shape**: plain Pydantic response models per endpoint, no
+  envelope (no `{"success": ..., "data": ...}` wrapper) — established by
+  every endpoint through Phase 6 (`approval.py`, `research.py`,
+  `publish_records.py`, `pending_chapters.py`, `cases.py`).
+- **CORS**: `CORSMiddleware` in `app.py` allows `http://localhost:3000` (the
+  Phase 6 Next.js dev server — see `docs/frontend-standards.md`). Add any
+  other real frontend origin to `allow_origins` there; don't use `["*"]`
+  once `allow_credentials=True` is set (the two are mutually exclusive per
+  the CORS spec, and FastAPI will reject it).
 
 ## Security Best Practices
 

@@ -74,3 +74,15 @@ def test_reading_manual_de_marca_returns_manually_authored_content(tmp_path):
     store = ProjectMemoryStore(memory_dir=tmp_path)
 
     assert "Never sensationalize." in store.read_manual_de_marca()
+
+
+def test_write_casos_cubiertos_replaces_the_full_file_content(tmp_path):
+    """Supports the content-admin-panel Covered Cases view (Phase 6): a
+    full-file rewrite is how an individual entry gets edited, since the
+    file has no per-line addressability of its own."""
+    store = ProjectMemoryStore(memory_dir=tmp_path)
+    store.append_caso_cubierto("original entry")
+
+    store.write_casos_cubiertos("entry one\nentry two\n")
+
+    assert store.read_casos_cubiertos() == "entry one\nentry two\n"
