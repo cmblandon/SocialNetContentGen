@@ -21,3 +21,4 @@ sqlalchemy>=2.0.0             # ORM for the editorial schema (Document/Story/Cha
 alembic>=1.13.0               # Database migrations for the editorial schema
 httpx>=0.27.0                  # required by FastAPI's TestClient for endpoint tests
 anthropic>=0.49.0              # cloud LLM client for story-writing/platform-adaptation
+deepagents>=0.7.0               # orchestration harness for editorial-orchestration (Phase 3) — pulls in langgraph/langchain
