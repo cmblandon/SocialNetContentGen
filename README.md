@@ -156,17 +156,48 @@ src/editorial/
 │       ├── models.py        # SQLAlchemy models: Document, Story, Chapter,
 │       │                    # PlatformVersion, PublishRecord
 │       ├── ficha_reader.py   # Read-only access to the ingestion pipeline's SQLite
+│       ├── project_memory.py # ProjectMemoryStore: casos_cubiertos.md, calendario.md, manual_de_marca.md
+│       ├── session.py        # SQLAlchemy session factory for editorial.sqlite
 │       └── migrations/      # Alembic environment + revisions
 └── presentation/
-    └── app.py                # FastAPI composition root (routers added per phase)
+    ├── app.py                # FastAPI composition root (routers added per phase)
+    └── routers/
+        └── approval.py       # POST /platform-versions/{id}/approve|reject
 ```
+
+Orchestration lives in two deliberately separate places:
+
+- `orchestrator_agents.py` — the `deepagents`/LangGraph wiring (`writer_agent`,
+  `platform_adapter_agent` as subagents, each a thin tool wrapping the
+  matching Phase 2 use case). This is where an LLM's judgment calls
+  (which angle to pursue, how to phrase a hook) belong.
+- `orchestrator.py` — `run_cycle`, the deterministic bookkeeping: checks a
+  document is ready to write from (real agency, real doc type, enough
+  extracted text — otherwise discard and record why, never invent
+  details), delegates to the use cases, persists the result as
+  `pending_review`, and updates `casos_cubiertos.md`. This does not need
+  the LLM in the loop and must behave identically every run.
 
 ### Running the editorial API locally
 
 ```bash
 source venv/bin/activate
 uvicorn src.editorial.presentation.app:app --reload
+
+# Apply the editorial schema first (note: must be `python3 -m alembic`, not
+# bare `alembic` — the latter doesn't have the project root on sys.path and
+# fails importing the models from env.py):
+python3 -m alembic upgrade head
 ```
+
+- `GET /health` — confirms the service is up.
+- `POST /platform-versions/{id}/approve` / `POST /platform-versions/{id}/reject`
+  — the Phase 3 stand-in for the real admin panel (Phase 6). This is the
+  human-approval gate: a `PlatformVersion` starts `pending_review` and stays
+  there until one of these is called; nothing (no future publisher) is
+  allowed to act on it until its status is `approved` (enforced by
+  `approval_gate.run_if_approved`, not by convention). An already-decided
+  item returns `409`; an unknown id returns `404`.
 
 ### Running the manual story + platform-adaptation CLI
 
@@ -187,10 +218,9 @@ python -m src.editorial.application.manual_curation_cli \
 
 This prints the generated story summary, each chapter's script and source
 citation, and a short summary of its four platform adaptations, for manual
-review. Nothing is persisted to `editorial.sqlite` yet — that starts once the
-orchestrator (Phase 3) owns writing `Story`/`Chapter`/`PlatformVersion` rows.
-
-- `GET /health` — confirms the service is up.
+review. It does not persist anything (it's a read-only preview tool); to
+actually persist a story as pending-review rows and go through the approval
+gate, use `orchestrator.run_cycle` with a real, already-persisted `Document`.
 
 ### Running the editorial database migrations
 

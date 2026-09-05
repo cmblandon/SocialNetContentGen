@@ -157,7 +157,10 @@ erDiagram
 
 ## Status
 
-As of Phase 1 of `archivo-desclasificado-pipeline`, all five editorial tables
-above exist and are covered by `tests/unit/test_editorial_models.py` and
-`tests/unit/test_editorial_migrations.py`. No rows are written to them yet by
-any use case — that starts in Phase 2 (`story-writing`/`platform-adaptation`).
+All five editorial tables exist (Phase 1) and are covered by
+`tests/unit/test_editorial_models.py` and `tests/unit/test_editorial_migrations.py`.
+`orchestrator.run_cycle` (Phase 3) is what actually writes rows: it persists a
+`Story`/`Chapter`/`PlatformVersion` chain via `approval_gate.persist_story`,
+every `PlatformVersion` starting at `status = pending_review`. `PublishRecord`
+rows are not written yet — that starts in Phase 5 (`publishing`), the first
+consumer of `approval_gate.run_if_approved`.

@@ -8,7 +8,10 @@ existing routes.
 """
 from fastapi import FastAPI
 
+from src.editorial.presentation.routers.approval import router as approval_router
+
 app = FastAPI(title="Archivo Desclasificado — Editorial Service")
+app.include_router(approval_router)
 
 
 @app.get("/health")

@@ -34,23 +34,23 @@
 
 ## 3. Phase 3 — editorial-orchestration (deepagents/LangGraph)
 
-- [ ] 3.1 Add `deepagents` (LangChain/LangGraph) and its Anthropic client dependency to `requirements.txt`
-- [ ] 3.2 Write failing tests for the virtual-filesystem memory files (`/casos_cubiertos.md`, `/calendario.md`, `/manual_de_marca.md`) being read at cycle start and updated at cycle end
-- [ ] 3.3 Implement the memory-file read/update logic to make 3.2 pass
-- [ ] 3.4 Write failing tests for the orchestrator graph delegating to the Phase 2 use cases as subagents/tools rather than executing them inline — per `specs/editorial-orchestration/spec.md`
-- [ ] 3.5 Implement the orchestrator graph wiring (writer + platform-adapter subagents) to make 3.4 pass
-- [ ] 3.6 Write failing tests for the approval-gate interrupt: the graph pauses before the publisher node, persists `PlatformVersion.status = pending_review`, and only resumes toward publishing when status observes `approved`
-- [ ] 3.7 Implement the approval-gate node (LangGraph `interrupt()` + `PublishRecord`/`PlatformVersion` status persistence) to make 3.6 pass
-- [ ] 3.8 Write failing tests for `POST /cycles/{id}/approve` and `POST /cycles/{id}/reject` stub endpoints that flip a pending item's status (stand-in for the real admin panel until Phase 6)
-- [ ] 3.9 Implement the approve/reject endpoints to make 3.8 pass
-- [ ] 3.10 Write failing tests for the ambiguous/incomplete-document handling rule (discard or request more research, never fabricate) — per `specs/editorial-orchestration/spec.md`
-- [ ] 3.11 Implement that handling in the orchestrator to make 3.10 pass
-- [ ] 3.12 Write failing tests for the end-of-cycle summary (documents reviewed, stories created, chapters generated, pending approvals)
-- [ ] 3.13 Implement the end-of-cycle summary to make 3.12 pass
-- [ ] 3.14 Review and Update Existing Unit Tests (MANDATORY)
-- [ ] 3.15 Run Unit Tests and Verify Database State (MANDATORY) — report at `openspec/changes/archivo-desclasificado-pipeline/reports/<YYYY-MM-DD>-step-3.15-unit-test-and-db-verification.md`
-- [ ] 3.16 Manual Endpoint Testing with curl (MANDATORY — AGENT MUST EXECUTE): test `POST /cycles/{id}/approve` and `POST /cycles/{id}/reject` against a seeded pending item, verify status transitions and error cases (unknown id, already-decided item), restore DB state after each test, document commands/responses in the phase report
-- [ ] 3.17 Update Technical Documentation (MANDATORY): document the orchestrator's stage flow and the approval-gate mechanics
+- [x] 3.1 Add `deepagents` (LangChain/LangGraph) and its Anthropic client dependency to `requirements.txt`
+- [x] 3.2 Write failing tests for the virtual-filesystem memory files (`/casos_cubiertos.md`, `/calendario.md`, `/manual_de_marca.md`) being read at cycle start and updated at cycle end (implemented as directly-tested file I/O rather than deepagents' internal backend — see task 3.3 note)
+- [x] 3.3 Implement the memory-file read/update logic to make 3.2 pass
+- [x] 3.4 Write failing tests for the orchestrator graph delegating to the Phase 2 use cases as subagents/tools rather than executing them inline — per `specs/editorial-orchestration/spec.md`
+- [x] 3.5 Implement the orchestrator graph wiring (writer + platform-adapter subagents) to make 3.4 pass
+- [x] 3.6 Write failing tests for the approval-gate interrupt: the graph pauses before the publisher node, persists `PlatformVersion.status = pending_review`, and only resumes toward publishing when status observes `approved` (also added `persist_story`, bridging Phase 2's in-memory drafts into the Phase 1 SQLAlchemy schema — required to have real status to gate on, not itemized separately above)
+- [x] 3.7 Implement the approval-gate node (`PlatformVersion` status persistence + `run_if_approved` gate) to make 3.6 pass — scoped to the application-layer status check rather than LangGraph's `interrupt()` primitive, since there is no publisher node yet to pause before (Phase 5); the design's own Decision 5 treats this persisted status as the authoritative enforcement regardless
+- [x] 3.8 Write failing tests for `POST /platform-versions/{id}/approve` and `POST /platform-versions/{id}/reject` stub endpoints that flip a pending item's status (stand-in for the real admin panel until Phase 6) — renamed from tasks.md's placeholder `/cycles/{id}/...` since there is no `Cycle` entity in the schema; the thing actually approved/rejected is a `PlatformVersion`
+- [x] 3.9 Implement the approve/reject endpoints to make 3.8 pass
+- [x] 3.10 Write failing tests for the ambiguous/incomplete-document handling rule (discard or request more research, never fabricate) — per `specs/editorial-orchestration/spec.md` (bundled with `run_cycle`, the top-level orchestration function tying together readiness-checking, delegation, persistence, and memory bookkeeping — this and 3.12 share one function so their tests share one file)
+- [x] 3.11 Implement that handling in the orchestrator to make 3.10 pass
+- [x] 3.12 Write failing tests for the end-of-cycle summary (documents reviewed, stories created, chapters generated, pending approvals) — covered by the same `test_orchestrator_cycle.py` / `run_cycle` as 3.10 (one function, one `CycleSummary` return value)
+- [x] 3.13 Implement the end-of-cycle summary to make 3.12 pass — same implementation as 3.11
+- [x] 3.14 Review and Update Existing Unit Tests (MANDATORY)
+- [x] 3.15 Run Unit Tests and Verify Database State (MANDATORY) — report at `openspec/changes/archivo-desclasificado-pipeline/reports/<YYYY-MM-DD>-step-3.15-unit-test-and-db-verification.md`
+- [x] 3.16 Manual Endpoint Testing with curl (MANDATORY — AGENT MUST EXECUTE): test `POST /platform-versions/{id}/approve` and `POST /platform-versions/{id}/reject` against seeded pending items, verify status transitions and error cases (unknown id, already-decided item), restore DB state after, document commands/responses in the phase report
+- [x] 3.17 Update Technical Documentation (MANDATORY): document the orchestrator's stage flow and the approval-gate mechanics
 
 ## 4. Phase 4 — research-agent & case-curation
 
