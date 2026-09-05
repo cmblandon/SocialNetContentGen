@@ -1,23 +1,23 @@
 ## 0. Setup: Create Feature Branch (MANDATORY - FIRST STEP)
 
-- [ ] 0.1 Create feature branch `feature/archivo-desclasificado-pipeline` from the current default branch
-- [ ] 0.2 Verify branch creation and current branch status
+- [x] 0.1 Create feature branch `feature/archivo-desclasificado-pipeline` from the current default branch
+- [x] 0.2 Verify branch creation and current branch status
 
 ## 1. Phase 1 — Backend Foundation (data model, ports, FastAPI skeleton)
 
-- [ ] 1.1 Add new backend dependencies to `requirements.txt` (`fastapi`, `uvicorn`, `sqlalchemy`, `alembic`) needed for this phase only
-- [ ] 1.2 Write failing tests for the `Document`, `Story`, `Chapter`, `PlatformVersion`, `PublishRecord` SQLAlchemy models (fields, relationships, the `PlatformVersion.status` enum from design Decision 5, and `Document.source_ficha_id` reference from design Decision 3)
-- [ ] 1.3 Implement the SQLAlchemy models under `src/editorial/infrastructure/persistence/models.py` to make 1.2 pass
-- [ ] 1.4 Write failing tests validating an Alembic migration creates and reverts the new schema cleanly
-- [ ] 1.5 Add Alembic configuration and the initial migration for the editorial schema to make 1.4 pass
-- [ ] 1.6 Write failing tests (structural/typing) for the new `ISourceScraper`, `ISocialPublisher`, and editorial `ILLMClient` `Protocol` ports
-- [ ] 1.7 Define the new ports in `src/editorial/core/ports.py` to make 1.6 pass
-- [ ] 1.8 Write a failing test for a FastAPI health-check route (`GET /health`)
-- [ ] 1.9 Implement the FastAPI app skeleton with the health route to make 1.8 pass
-- [ ] 1.10 Review and Update Existing Unit Tests (MANDATORY)
-- [ ] 1.11 Run Unit Tests and Verify Database State (MANDATORY) — capture pre/post DB baseline for the new schema, run targeted then full suite, create report at `openspec/changes/archivo-desclasificado-pipeline/reports/<YYYY-MM-DD>-step-1.11-unit-test-and-db-verification.md`
-- [ ] 1.12 Manual Endpoint Testing with curl (MANDATORY — AGENT MUST EXECUTE): start the FastAPI server, `curl -X GET http://localhost:8000/health`, verify 200 response, document the command and response in the phase report
-- [ ] 1.13 Update Technical Documentation (MANDATORY): document the new `src/editorial/` module layout and how it relates to the existing ingestion pipeline
+- [x] 1.1 Add new backend dependencies to `requirements.txt` (`fastapi`, `uvicorn`, `sqlalchemy`, `alembic`) needed for this phase only
+- [x] 1.2 Write failing tests for the `Document`, `Story`, `Chapter`, `PlatformVersion`, `PublishRecord` SQLAlchemy models (fields, relationships, the `PlatformVersion.status` enum from design Decision 5, and `Document.source_ficha_id` reference from design Decision 3)
+- [x] 1.3 Implement the SQLAlchemy models under `src/editorial/infrastructure/persistence/models.py` to make 1.2 pass
+- [x] 1.4 Write failing tests validating an Alembic migration creates and reverts the new schema cleanly
+- [x] 1.5 Add Alembic configuration and the initial migration for the editorial schema to make 1.4 pass
+- [x] 1.6 Write failing tests (structural/typing) for the new `ISourceScraper`, `ISocialPublisher`, and editorial `ILLMClient` `Protocol` ports
+- [x] 1.7 Define the new ports in `src/editorial/core/ports.py` to make 1.6 pass
+- [x] 1.8 Write a failing test for a FastAPI health-check route (`GET /health`)
+- [x] 1.9 Implement the FastAPI app skeleton with the health route to make 1.8 pass
+- [x] 1.10 Review and Update Existing Unit Tests (MANDATORY)
+- [x] 1.11 Run Unit Tests and Verify Database State (MANDATORY) — capture pre/post DB baseline for the new schema, run targeted then full suite, create report at `openspec/changes/archivo-desclasificado-pipeline/reports/<YYYY-MM-DD>-step-1.11-unit-test-and-db-verification.md`
+- [x] 1.12 Manual Endpoint Testing with curl (MANDATORY — AGENT MUST EXECUTE): start the FastAPI server, `curl -X GET http://localhost:8000/health`, verify 200 response, document the command and response in the phase report
+- [x] 1.13 Update Technical Documentation (MANDATORY): document the new `src/editorial/` module layout and how it relates to the existing ingestion pipeline
 
 ## 2. Phase 2 — story-writing & platform-adaptation use cases
 

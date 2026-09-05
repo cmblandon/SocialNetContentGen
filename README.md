@@ -115,3 +115,57 @@ sqlite3 data/knowledge_base/expedientes.sqlite "SELECT id, archivo_origen, confi
   `IDocumentRepository` en `src/infrastructure/persistence/` y cámbialo
   en `src/main.py` — ninguna otra capa necesita cambiar.
 
+## Editorial Service (`src/editorial/` — "Archivo Desclasificado")
+
+This is a second, distinct bounded context being built on top of the ingestion
+pipeline above, implementing the `archivo-desclasificado-pipeline` OpenSpec
+change (see `openspec/changes/archivo-desclasificado-pipeline/`). It turns
+curated documents into narrative stories, adapts them per social platform, and
+publishes them behind a mandatory human-approval gate.
+
+### How it relates to the ingestion pipeline
+
+- The ingestion pipeline (`src/core`, `src/application`, `src/infrastructure`)
+  is unchanged and keeps owning `FichaEstructurada` records in
+  `data/knowledge_base/expedientes.sqlite`.
+- `src/editorial/` owns its own schema (`data/knowledge_base/editorial.sqlite`,
+  managed by Alembic — see `alembic.ini`) built around a different concern:
+  editorial case records, not raw LLM-depuration output.
+- When an editorial `Document` originates from a manually-ingested PDF, it
+  stores a reference to the source `FichaEstructurada` via
+  `Document.source_ficha_id` instead of duplicating its fields.
+
+### Module layout
+
+Follows the same Clean/Hexagonal Architecture split as the ingestion pipeline:
+
+```
+src/editorial/
+├── core/
+│   └── ports.py            # ISourceScraper, ISocialPublisher, ILLMClient (Protocols)
+├── application/             # Use cases (story-writing, platform-adaptation, ...)
+├── infrastructure/
+│   └── persistence/
+│       ├── models.py        # SQLAlchemy models: Document, Story, Chapter,
+│       │                    # PlatformVersion, PublishRecord
+│       └── migrations/      # Alembic environment + revisions
+└── presentation/
+    └── app.py                # FastAPI composition root (routers added per phase)
+```
+
+### Running the editorial API locally
+
+```bash
+source venv/bin/activate
+uvicorn src.editorial.presentation.app:app --reload
+```
+
+- `GET /health` — confirms the service is up.
+
+### Running the editorial database migrations
+
+```bash
+alembic upgrade head    # create the editorial schema
+alembic downgrade base  # revert it
+```
+

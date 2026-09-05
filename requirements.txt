@@ -13,3 +13,10 @@ pydantic-settings>=2.0.0     # gestión tipada de configuración y .env
 pytest>=8.0.0                # Test framework
 pytest-mock>=3.14.0         # Mocking library for dependency injection testing
 pytest-cov>=5.0.0           # Test coverage reporting
+
+# Editorial backend service (archivo-desclasificado-pipeline change, Phase 1)
+fastapi>=0.115.0             # HTTP API for the editorial service
+uvicorn>=0.30.0               # ASGI server to run the FastAPI app
+sqlalchemy>=2.0.0             # ORM for the editorial schema (Document/Story/Chapter/PlatformVersion/PublishRecord)
+alembic>=1.13.0               # Database migrations for the editorial schema
+httpx>=0.27.0                  # required by FastAPI's TestClient for endpoint tests
