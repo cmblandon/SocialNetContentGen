@@ -1,0 +1,15 @@
+# Pipeline de ingesta local — Proyecto Expediente
+# Instalar con: pip install -r requirements.txt
+
+mlx-lm>=0.19.0               # servidor del modelo local (Apple Silicon)
+markitdown>=0.0.1a3          # extracción PDF -> markdown/texto
+pypdf>=4.0.0                 # inspección de PDFs (detección de capa de texto)
+requests>=2.31.0             # llamadas al servidor local del modelo
+chromadb>=0.5.0              # vector store local
+sentence-transformers>=3.0.0 # embeddings locales multilingües
+pydantic-settings>=2.0.0     # gestión tipada de configuración y .env
+
+# Test dependencies for unit testing infrastructure (implement-unit-testing change)
+pytest>=8.0.0                # Test framework
+pytest-mock>=3.14.0         # Mocking library for dependency injection testing
+pytest-cov>=5.0.0           # Test coverage reporting
