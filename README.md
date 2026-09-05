@@ -148,10 +148,16 @@ src/editorial/
 ├── application/
 │   ├── story_writing_use_case.py        # Document -> StoryDraft (chapters + hooks)
 │   ├── platform_adaptation_use_case.py  # Chapter -> TikTok/Instagram/X/Facebook
+│   ├── research_agent_use_case.py       # candidate URLs -> ScrapedDocument list
+│   ├── case_curation_use_case.py        # ScrapedDocument -> score + narrative angle
 │   └── manual_curation_cli.py           # Phase 2 manual entrypoint (see below)
 ├── infrastructure/
 │   ├── llm/
 │   │   └── anthropic_llm_client.py      # Cloud ILLMClient implementation
+│   ├── scraping/
+│   │   ├── jina_scraper.py              # Default ISourceScraper (cheap, raw text)
+│   │   ├── firecrawl_scraper.py         # Fallback ISourceScraper (AI-structured)
+│   │   └── doc_type.py                  # Shared URL-extension -> doc_type heuristic
 │   └── persistence/
 │       ├── models.py        # SQLAlchemy models: Document, Story, Chapter,
 │       │                    # PlatformVersion, PublishRecord
@@ -162,8 +168,44 @@ src/editorial/
 └── presentation/
     ├── app.py                # FastAPI composition root (routers added per phase)
     └── routers/
-        └── approval.py       # POST /platform-versions/{id}/approve|reject
+        ├── approval.py       # POST /platform-versions/{id}/approve|reject
+        └── research.py       # POST /research/run
 ```
+
+### Research sources and the scraper fallback
+
+`research_agent_use_case.ALLOWED_SOURCE_DOMAINS` is the source allowlist per
+`specs/research-agent/spec.md`: `war.gov`, `cia.gov`, `archives.gov`,
+`aaro.mil`, `odni.gov`, `theblackvault.com` (locator only — the research
+agent doesn't verify it resolves back to the original agency; that's a
+manual/future check). Any URL outside this list is discarded before ever
+being fetched.
+
+Scraping goes through `ISourceScraper` (design.md Decision 7): `JinaScraperAdapter`
+is the default (cheap, returns raw text/markdown, so `extraction_confidence`
+is always `"baja"`); `FirecrawlScraperAdapter` is the fallback used only when
+Jina returns nothing (protected/complex pages), doing AI-structured
+extraction (`extraction_confidence = "alta"`). Swap or add an implementation
+by writing a new class satisfying `ISourceScraper` — nothing else changes.
+Configure via `.env`: `JINA_API_KEY`, `FIRECRAWL_API_KEY` (both optional;
+Firecrawl is skipped entirely if unset).
+
+**Scope note**: `ResearchAgentUseCase.discover()` processes a list of
+candidate URLs the caller supplies — it does not itself crawl a source's
+listing pages to find new links. Autonomous link discovery is a larger
+scraping project not yet built.
+
+### Case-curation scoring rubric
+
+`CaseCurationUseCase` asks the LLM to score a document 1-5 on each of
+`novedad`, `potencial_narrativo`, `respaldo_documental`, `elemento_visual`,
+`encaje_audiencia` (per `specs/case-curation/spec.md`), sums them
+(`CurationScore.total`, max 25), and advances only at
+`ADVANCEMENT_THRESHOLD = 15` or above — a case scoring lower is discarded.
+Every evaluated case (advanced or discarded) is recorded in
+`casos_cubiertos.md` with its score, so it's never re-scored; an advanced
+case must also carry a non-empty `narrative_angle` or the use case raises
+`CurationError` rather than silently advancing an unjustified case.
 
 Orchestration lives in two deliberately separate places:
 
@@ -198,6 +240,12 @@ python3 -m alembic upgrade head
   allowed to act on it until its status is `approved` (enforced by
   `approval_gate.run_if_approved`, not by convention). An already-decided
   item returns `409`; an unknown id returns `404`.
+- `POST /research/run` — the manual trigger for a research+curation pass
+  (design.md defers autonomous daily/cron scheduling as a Non-Goal; call
+  this yourself when you want a new cycle). Body: `{"source_urls": [...]}`
+  (at least one required). Runs discover → curate → write → adapt →
+  persist for every URL that clears the allowlist, dedup, and curation
+  threshold, and returns the same summary shape as `run_cycle`.
 
 ### Running the manual story + platform-adaptation CLI
 

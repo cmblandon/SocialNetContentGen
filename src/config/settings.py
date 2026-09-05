@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     elevenlabs_api_key: str = ""
 
+    # --- API keys para research-agent (editorial service, Phase 4) ---
+    jina_api_key: str = ""
+    firecrawl_api_key: str = ""
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

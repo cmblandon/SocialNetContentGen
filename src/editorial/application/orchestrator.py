@@ -16,9 +16,11 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from src.editorial.application.approval_gate import persist_story
+from src.editorial.application.case_curation_use_case import CaseCurationUseCase
 from src.editorial.application.platform_adaptation_use_case import (
     PlatformAdaptationUseCase,
 )
+from src.editorial.application.research_agent_use_case import ResearchAgentUseCase
 from src.editorial.application.story_writing_use_case import StoryWritingUseCase
 from src.editorial.infrastructure.persistence.models import Document
 from src.editorial.infrastructure.persistence.project_memory import ProjectMemoryStore
@@ -107,3 +109,48 @@ def run_cycle(
         )
 
     return summary
+
+
+def run_research_cycle(
+    session: Session,
+    source_urls: list[str],
+    research_agent: ResearchAgentUseCase,
+    case_curation: CaseCurationUseCase,
+    story_writing_use_case: StoryWritingUseCase,
+    platform_adaptation_use_case: PlatformAdaptationUseCase,
+    memory_store: ProjectMemoryStore,
+) -> CycleSummary:
+    """
+    Real input path (Phase 4), replacing the Phase 2 manual-curation CLI
+    fixture: discover -> curate -> (only advanced documents) write/adapt/
+    persist via run_cycle. A document that curation discards or has
+    already evaluated never reaches story-writing.
+    """
+    research_result = research_agent.discover(source_urls)
+
+    documents_with_angles: list[tuple[Document, str]] = []
+    for scraped_document in research_result.documents:
+        curation_result = case_curation.curate(scraped_document)
+        if curation_result is None or not curation_result.advanced:
+            continue
+
+        document = Document(
+            title=scraped_document.title,
+            agency=scraped_document.agency,
+            doc_type=scraped_document.doc_type,
+            published_date=scraped_document.published_date,
+            source_url=scraped_document.source_url,
+            extracted_text=scraped_document.extracted_text,
+            extraction_confidence=scraped_document.extraction_confidence,
+        )
+        session.add(document)
+        session.commit()
+        documents_with_angles.append((document, curation_result.narrative_angle))
+
+    return run_cycle(
+        session=session,
+        documents_with_angles=documents_with_angles,
+        story_writing_use_case=story_writing_use_case,
+        platform_adaptation_use_case=platform_adaptation_use_case,
+        memory_store=memory_store,
+    )

@@ -54,22 +54,22 @@
 
 ## 4. Phase 4 — research-agent & case-curation
 
-- [ ] 4.1 Add the chosen scraping client dependency (`httpx` plus Jina AI Reader usage; Firecrawl SDK as fallback) to `requirements.txt`
-- [ ] 4.2 Write failing tests for the Jina-based `ISourceScraper` implementation against a mocked HTTP layer (source discovery, structured record extraction, OCR-summary handling for scanned PDFs, video/image description-only handling) — per `specs/research-agent/spec.md`
-- [ ] 4.3 Implement the Jina scraper adapter to make 4.2 pass
-- [ ] 4.4 Write failing tests for the Firecrawl fallback adapter (used when Jina fails on a protected/complex page) against a mocked HTTP layer
-- [ ] 4.5 Implement the Firecrawl scraper adapter to make 4.4 pass
-- [ ] 4.6 Write failing tests for `ResearchAgentUseCase`: source allowlist enforcement, discard-on-unverifiable/login-protected source with reporting, dedup against `/casos_cubiertos.md` before extraction, and "no interpretation" output constraint
-- [ ] 4.7 Implement `ResearchAgentUseCase` to make 4.6 pass
-- [ ] 4.8 Write failing tests for `CaseCurationUseCase`: five-criteria scoring, the ≥15/25 advancement threshold, permanent recording of every evaluated case (advanced or discarded) with date and reason, and the narrative-angle note attached on advancement — per `specs/case-curation/spec.md`
-- [ ] 4.9 Implement `CaseCurationUseCase` to make 4.8 pass
-- [ ] 4.10 Wire `ResearchAgentUseCase` and `CaseCurationUseCase` into the Phase 3 orchestrator, replacing the Phase 2 manual-curation CLI fixture as the real input path
-- [ ] 4.11 Write failing tests for a `POST /research/run` trigger endpoint that starts a research+curation pass on demand (manual trigger, per design's Non-Goal deferring cron scheduling)
-- [ ] 4.12 Implement the `POST /research/run` endpoint to make 4.11 pass
-- [ ] 4.13 Review and Update Existing Unit Tests (MANDATORY)
-- [ ] 4.14 Run Unit Tests and Verify Database State (MANDATORY) — report at `openspec/changes/archivo-desclasificado-pipeline/reports/<YYYY-MM-DD>-step-4.14-unit-test-and-db-verification.md`
-- [ ] 4.15 Manual Endpoint Testing with curl (MANDATORY — AGENT MUST EXECUTE): `curl -X POST http://localhost:8000/research/run` against mocked/sandboxed sources, verify response and resulting `/casos_cubiertos.md` + `Document` records, restore DB state after the test, document commands/responses in the phase report
-- [ ] 4.16 Update Technical Documentation (MANDATORY): document the source allowlist, the scraper adapter swap mechanism (Jina/Firecrawl), and the scoring rubric
+- [x] 4.1 Add the chosen scraping client dependency (`httpx` plus Jina AI Reader usage; Firecrawl SDK as fallback) to `requirements.txt` — `httpx` is already present from Phase 1; implemented the Firecrawl fallback via raw HTTP against its `/v1/extract` API rather than the `firecrawl-py` SDK, keeping both adapters symmetric and avoiding an extra dependency
+- [x] 4.2 Write failing tests for the Jina-based `ISourceScraper` implementation against a mocked HTTP layer (source discovery, structured record extraction, OCR-summary handling for scanned PDFs, video/image description-only handling) — per `specs/research-agent/spec.md`
+- [x] 4.3 Implement the Jina scraper adapter to make 4.2 pass
+- [x] 4.4 Write failing tests for the Firecrawl fallback adapter (used when Jina fails on a protected/complex page) against a mocked HTTP layer
+- [x] 4.5 Implement the Firecrawl scraper adapter to make 4.4 pass
+- [x] 4.6 Write failing tests for `ResearchAgentUseCase`: source allowlist enforcement, discard-on-unverifiable/login-protected source with reporting, dedup against `/casos_cubiertos.md` before extraction, and "no interpretation" output constraint (scoped to processing a supplied list of candidate URLs, not autonomous listing-page crawling — see test file docstring)
+- [x] 4.7 Implement `ResearchAgentUseCase` to make 4.6 pass
+- [x] 4.8 Write failing tests for `CaseCurationUseCase`: five-criteria scoring, the ≥15/25 advancement threshold, permanent recording of every evaluated case (advanced or discarded) with date and reason, and the narrative-angle note attached on advancement — per `specs/case-curation/spec.md`
+- [x] 4.9 Implement `CaseCurationUseCase` to make 4.8 pass
+- [x] 4.10 Wire `ResearchAgentUseCase` and `CaseCurationUseCase` into the Phase 3 orchestrator, replacing the Phase 2 manual-curation CLI fixture as the real input path (`orchestrator.run_research_cycle`)
+- [x] 4.11 Write failing tests for a `POST /research/run` trigger endpoint that starts a research+curation pass on demand (manual trigger, per design's Non-Goal deferring cron scheduling)
+- [x] 4.12 Implement the `POST /research/run` endpoint to make 4.11 pass
+- [x] 4.13 Review and Update Existing Unit Tests (MANDATORY)
+- [x] 4.14 Run Unit Tests and Verify Database State (MANDATORY) — report at `openspec/changes/archivo-desclasificado-pipeline/reports/<YYYY-MM-DD>-step-4.14-unit-test-and-db-verification.md`
+- [x] 4.15 Manual Endpoint Testing with curl (MANDATORY — AGENT MUST EXECUTE): curl-tested request validation and route wiring against a real live server; the full discover→curate→write→adapt→persist happy path is covered by `tests/unit/test_research_endpoint.py`'s `TestClient` + dependency-override fakes instead of live curl, since no `.env`/API keys are configured and the real dependencies would otherwise make genuine calls to Jina/Firecrawl/Anthropic — see the report's scope note
+- [x] 4.16 Update Technical Documentation (MANDATORY): document the source allowlist, the scraper adapter swap mechanism (Jina/Firecrawl), and the scoring rubric
 
 ## 5. Phase 5 — publishing
 
