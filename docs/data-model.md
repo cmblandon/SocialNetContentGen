@@ -159,8 +159,15 @@ erDiagram
 
 All five editorial tables exist (Phase 1) and are covered by
 `tests/unit/test_editorial_models.py` and `tests/unit/test_editorial_migrations.py`.
-`orchestrator.run_cycle` (Phase 3) is what actually writes rows: it persists a
-`Story`/`Chapter`/`PlatformVersion` chain via `approval_gate.persist_story`,
-every `PlatformVersion` starting at `status = pending_review`. `PublishRecord`
-rows are not written yet — that starts in Phase 5 (`publishing`), the first
-consumer of `approval_gate.run_if_approved`.
+The full chain is live end to end:
+
+- `orchestrator.run_research_cycle` (Phases 3-4) persists a
+  `Document`/`Story`/`Chapter`/`PlatformVersion` chain via
+  `approval_gate.persist_story`, every `PlatformVersion` starting at
+  `status = pending_review`.
+- `PublishingUseCase` (Phase 5) writes `PublishRecord` rows the moment a
+  `PlatformVersion` is approved — see `approval_gate.run_if_approved`.
+- The Phase 6 admin panel (`frontend/`) reads this schema through
+  `GET /chapters/pending` (pending items with full context),
+  `GET /publish-records` (the calendar view), and `GET`/`PATCH /cases`
+  (which reads/edits `casos_cubiertos.md`, not this SQL schema).

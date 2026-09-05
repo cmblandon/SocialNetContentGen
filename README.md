@@ -1,3 +1,33 @@
+# Archivo Desclasificado
+
+A pipeline that turns official declassified UFO/UAP documents into
+narrative, source-cited stories, adapts them per social platform, and
+publishes them behind a mandatory human-approval gate. Built in two
+bounded contexts across two OpenSpec changes: the local ingestion pipeline
+("Proyecto Expediente", below) and the editorial service
+(`src/editorial/` + `frontend/`, implementing
+`openspec/changes/archivo-desclasificado-pipeline/`).
+
+## End-to-end pipeline
+
+```
+   INGESTION (local, manual)                    EDITORIAL SERVICE (src/editorial/ + frontend/)
+  ┌─────────────────────────┐   ┌──────────────────────────────────────────────────────────────────┐
+  │ PDF -> OCR? -> MarkItDown│   │ research-agent -> case-curation -> story-writing -> platform-      │
+  │ -> Depurador (MLX local) │──▶│ adaptation -> [human approval, admin panel] -> publishing (Postiz) │
+  │ -> SQLite + ChromaDB     │   │                                                                    │
+  └─────────────────────────┘   └──────────────────────────────────────────────────────────────────┘
+```
+
+- **Ingestion** (this section, §1-6 below): manual PDF drop-in, 100% local, produces a `FichaEstructurada` in `expedientes.sqlite`.
+- **research-agent / case-curation** ([§ Research sources](#research-sources-and-the-scraper-fallback), [§ scoring rubric](#case-curation-scoring-rubric)): discovers or accepts a document, scores it, decides whether it's worth writing.
+- **story-writing / platform-adaptation** ([§ manual CLI](#running-the-manual-story--platform-adaptation-cli)): turns a curated document into a chaptered story and four platform-specific versions.
+- **orchestration / human approval** (see the "Editorial Service" and "Editorial Admin Panel" sections below): `run_cycle`/`run_research_cycle` tie the above together; nothing reaches a publisher without an explicit approval recorded via the API or the admin panel.
+- **publishing** ([§ Publishing](#publishing-and-the-publisher-swap-mechanism)): approved content goes out through `ISocialPublisher` (Postiz by default), with every attempt recorded for the calendar view.
+
+Each stage's own README section below has the concrete setup/run
+instructions; this is just the map connecting them.
+
 # Pipeline de ingesta — Proyecto Expediente
 
 Convierte PDFs de documentos desclasificados en fichas estructuradas

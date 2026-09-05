@@ -106,7 +106,7 @@
 
 ## 7. Final Wrap-up
 
-- [ ] 7.1 Update the root `README.md` to describe the end-to-end pipeline (ingestion → research/curation → writing/adaptation → orchestration/approval → publishing → admin panel)
-- [ ] 7.2 Replace the stale, unrelated-template content in `docs/data-model.md` with the actual editorial schema (`Document → Story → Chapter → PlatformVersion → PublishRecord`)
-- [ ] 7.3 Verify no broken symlinks or duplicated canonical artifacts were introduced in `.claude`/`.cursor`/`ai-specs` by this change, per CLAUDE.md Section 6
-- [ ] 7.4 Final full-suite test run (backend + frontend) and confirm all phase reports exist under `openspec/changes/archivo-desclasificado-pipeline/reports/`
+- [x] 7.1 Update the root `README.md` to describe the end-to-end pipeline (ingestion → research/curation → writing/adaptation → orchestration/approval → publishing → admin panel)
+- [x] 7.2 Replace the stale, unrelated-template content in `docs/data-model.md` with the actual editorial schema (`Document → Story → Chapter → PlatformVersion → PublishRecord`) — done incrementally starting Phase 1 (the original unrelated-template content was replaced then, per the docs-consistency pass); this step brought the trailing "Status" section up to date through Phase 6, which had gone stale
+- [x] 7.3 Verify no broken symlinks or duplicated canonical artifacts were introduced in `.claude`/`.cursor`/`ai-specs` by this change, per CLAUDE.md Section 6 — confirmed no symlinks exist anywhere in the repo and no `ai-specs`/`.cursor` directories exist; this project doesn't use that convention, so the section doesn't apply
+- [x] 7.4 Final full-suite test run (backend + frontend) and confirm all phase reports exist under `openspec/changes/archivo-desclasificado-pipeline/reports/` — 196 backend + 10 frontend tests passing; all 12 expected reports present
