@@ -21,16 +21,16 @@
 
 ## 2. Phase 2 — story-writing & platform-adaptation use cases
 
-- [ ] 2.1 Write failing tests for `StoryWritingUseCase` covering: hook/development/close structure, chapter splitting into 150-220 word chapters with grounded cliffhangers, per-chapter delivery format (title/script/visuals/citation), and rejection of fabricated quotes/overstated claims — per `specs/story-writing/spec.md`
-- [ ] 2.2 Implement `StoryWritingUseCase` (using the new editorial `ILLMClient` cloud implementation) to make 2.1 pass
-- [ ] 2.3 Write failing tests for `PlatformAdaptationUseCase` covering all four platform formats (TikTok/Reels, Instagram carousel, X thread, Facebook) — per `specs/platform-adaptation/spec.md`
-- [ ] 2.4 Implement `PlatformAdaptationUseCase` to make 2.3 pass
-- [ ] 2.5 Write failing tests for a CLI entrypoint that feeds an existing manually-ingested `FichaEstructurada` (marked curated via a fixture/flag) into the two use cases above
-- [ ] 2.6 Implement the CLI entrypoint to make 2.5 pass
-- [ ] 2.7 Review and Update Existing Unit Tests (MANDATORY)
-- [ ] 2.8 Run Unit Tests and Verify Database State (MANDATORY) — report at `openspec/changes/archivo-desclasificado-pipeline/reports/<YYYY-MM-DD>-step-2.8-unit-test-and-db-verification.md`
-- [ ] 2.9 Update Technical Documentation (MANDATORY): document how to run the manual story+adaptation CLI against an existing ingested document
-- [ ] 2.10 Confirm no new HTTP endpoints were introduced in this phase (curl testing not applicable — use cases are exercised via the CLI fixture only)
+- [x] 2.1 Write failing tests for `StoryWritingUseCase` covering: hook/development/close structure, chapter splitting into 150-220 word chapters with grounded cliffhangers, per-chapter delivery format (title/script/visuals/citation), and rejection of fabricated quotes/overstated claims — per `specs/story-writing/spec.md`
+- [x] 2.2 Implement `StoryWritingUseCase` (using the new editorial `ILLMClient` cloud implementation) to make 2.1 pass
+- [x] 2.3 Write failing tests for `PlatformAdaptationUseCase` covering all four platform formats (TikTok/Reels, Instagram carousel, X thread, Facebook) — per `specs/platform-adaptation/spec.md`
+- [x] 2.4 Implement `PlatformAdaptationUseCase` to make 2.3 pass
+- [x] 2.5 Write failing tests for a CLI entrypoint that feeds an existing manually-ingested `FichaEstructurada` (marked curated via a fixture/flag) into the two use cases above
+- [x] 2.6 Implement the CLI entrypoint to make 2.5 pass (also added `AnthropicLLMClient`, the concrete editorial `ILLMClient`, so the CLI's `main()` is genuinely runnable — not itemized separately above but required for this task's own goal)
+- [x] 2.7 Review and Update Existing Unit Tests (MANDATORY)
+- [x] 2.8 Run Unit Tests and Verify Database State (MANDATORY) — report at `openspec/changes/archivo-desclasificado-pipeline/reports/<YYYY-MM-DD>-step-2.8-unit-test-and-db-verification.md`
+- [x] 2.9 Update Technical Documentation (MANDATORY): document how to run the manual story+adaptation CLI against an existing ingested document
+- [x] 2.10 Confirm no new HTTP endpoints were introduced in this phase (curl testing not applicable — use cases are exercised via the CLI fixture only)
 
 ## 3. Phase 3 — editorial-orchestration (deepagents/LangGraph)
 

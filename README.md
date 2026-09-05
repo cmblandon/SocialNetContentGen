@@ -142,12 +142,20 @@ Follows the same Clean/Hexagonal Architecture split as the ingestion pipeline:
 ```
 src/editorial/
 ├── core/
-│   └── ports.py            # ISourceScraper, ISocialPublisher, ILLMClient (Protocols)
-├── application/             # Use cases (story-writing, platform-adaptation, ...)
+│   ├── entities.py          # ChapterDraft, StoryDraft, PlatformAdaptations, ...
+│   ├── exceptions.py         # StoryGenerationError
+│   └── ports.py              # ISourceScraper, ISocialPublisher, ILLMClient (Protocols)
+├── application/
+│   ├── story_writing_use_case.py        # Document -> StoryDraft (chapters + hooks)
+│   ├── platform_adaptation_use_case.py  # Chapter -> TikTok/Instagram/X/Facebook
+│   └── manual_curation_cli.py           # Phase 2 manual entrypoint (see below)
 ├── infrastructure/
+│   ├── llm/
+│   │   └── anthropic_llm_client.py      # Cloud ILLMClient implementation
 │   └── persistence/
 │       ├── models.py        # SQLAlchemy models: Document, Story, Chapter,
 │       │                    # PlatformVersion, PublishRecord
+│       ├── ficha_reader.py   # Read-only access to the ingestion pipeline's SQLite
 │       └── migrations/      # Alembic environment + revisions
 └── presentation/
     └── app.py                # FastAPI composition root (routers added per phase)
@@ -159,6 +167,28 @@ src/editorial/
 source venv/bin/activate
 uvicorn src.editorial.presentation.app:app --reload
 ```
+
+### Running the manual story + platform-adaptation CLI
+
+Until Phase 4 (`research-agent`/`case-curation`) automates document discovery
+and scoring, you can manually point the editorial service's writer/adapter at
+any document already processed by the ingestion pipeline (i.e. already in
+`data/knowledge_base/expedientes.sqlite`):
+
+```bash
+source venv/bin/activate
+export ANTHROPIC_API_KEY=sk-ant-api03-...   # or set it in .env
+
+python -m src.editorial.application.manual_curation_cli \
+  --doc-id <the ingestion pipeline's document id> \
+  --doc-type report \
+  --narrative-angle "military witness + radar corroboration, classified 40 years"
+```
+
+This prints the generated story summary, each chapter's script and source
+citation, and a short summary of its four platform adaptations, for manual
+review. Nothing is persisted to `editorial.sqlite` yet — that starts once the
+orchestrator (Phase 3) owns writing `Story`/`Chapter`/`PlatformVersion` rows.
 
 - `GET /health` — confirms the service is up.
 

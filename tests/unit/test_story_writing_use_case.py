@@ -1,0 +1,252 @@
+"""
+Tests for StoryWritingUseCase — per specs/story-writing/spec.md.
+
+The LLM does the actual creative writing (hook/development/close, chapter
+splitting, cliffhangers) — this use case's job is prompting it with the
+source document, parsing its structured JSON output, and enforcing the
+requirements that ARE mechanically checkable: chapter length, a citation on
+every chapter, no quoted text absent from the source document (fabricated
+quotes), and no sensationalist/overstated phrasing.
+"""
+import json
+
+import pytest
+
+from src.editorial.application.story_writing_use_case import StoryWritingUseCase
+from src.editorial.core.entities import ChapterDraft, StoryDraft
+from src.editorial.core.exceptions import StoryGenerationError
+
+DOCUMENT_TEXT = (
+    "A pilot reported an unidentified radar contact over the Pacific. "
+    'The incident log states: "radar contact was lost at 0200 hours" '
+    "before the aircraft returned to base without further incident."
+)
+
+
+def _words(count: int) -> str:
+    return " ".join(["word"] * count)
+
+
+def _valid_script(extra: str = "") -> str:
+    """A script within the 150-220 word range."""
+    base = _words(180)
+    return f"{base} {extra}".strip()
+
+
+def _chapter(
+    title="Part 1",
+    script=None,
+    visual_notes="Show the radar log on screen.",
+    source_citation="AARO, report, 2024-03-01",
+):
+    return {
+        "title": title,
+        "script": script if script is not None else _valid_script(),
+        "visual_notes": visual_notes,
+        "source_citation": source_citation,
+    }
+
+
+class FakeLLMClient:
+    def __init__(self, response_text: str):
+        self._response_text = response_text
+        self.last_prompt: str | None = None
+
+    def complete(self, prompt: str) -> str:
+        self.last_prompt = prompt
+        return self._response_text
+
+
+def _use_case(response_payload: dict) -> tuple[StoryWritingUseCase, FakeLLMClient]:
+    llm = FakeLLMClient(json.dumps(response_payload))
+    return StoryWritingUseCase(llm_client=llm), llm
+
+
+def test_generates_single_chapter_for_short_document():
+    payload = {"summary": "A radar contact goes unexplained.", "chapters": [_chapter()]}
+    use_case, _ = _use_case(payload)
+
+    draft = use_case.write_story(
+        document_text=DOCUMENT_TEXT,
+        agency="AARO",
+        doc_type="report",
+        published_date="2024-03-01",
+        narrative_angle="military witness + radar corroboration",
+    )
+
+    assert isinstance(draft, StoryDraft)
+    assert draft.summary == "A radar contact goes unexplained."
+    assert len(draft.chapters) == 1
+    assert isinstance(draft.chapters[0], ChapterDraft)
+    assert draft.chapters[0].title == "Part 1"
+
+
+def test_generates_multiple_chapters_for_long_document():
+    payload = {
+        "summary": "A multi-part case.",
+        "chapters": [
+            _chapter(title="Part 1"),
+            _chapter(title="Part 2"),
+            _chapter(title="Part 3"),
+        ],
+    }
+    use_case, _ = _use_case(payload)
+
+    draft = use_case.write_story(
+        document_text=DOCUMENT_TEXT,
+        agency="AARO",
+        doc_type="report",
+        published_date="2024-03-01",
+        narrative_angle="lengthy case with multiple annexes",
+    )
+
+    assert [c.title for c in draft.chapters] == ["Part 1", "Part 2", "Part 3"]
+
+
+def test_assigns_sequential_chapter_indices_by_order():
+    payload = {"summary": "s", "chapters": [_chapter(title="A"), _chapter(title="B")]}
+    use_case, _ = _use_case(payload)
+
+    draft = use_case.write_story(
+        document_text=DOCUMENT_TEXT,
+        agency="AARO",
+        doc_type="report",
+        published_date="2024-03-01",
+        narrative_angle="angle",
+    )
+
+    assert [c.chapter_index for c in draft.chapters] == [1, 2]
+
+
+def test_prompt_includes_document_text_agency_and_narrative_angle():
+    payload = {"summary": "s", "chapters": [_chapter()]}
+    use_case, llm = _use_case(payload)
+
+    use_case.write_story(
+        document_text=DOCUMENT_TEXT,
+        agency="AARO",
+        doc_type="report",
+        published_date="2024-03-01",
+        narrative_angle="military witness + radar corroboration",
+    )
+
+    assert DOCUMENT_TEXT in llm.last_prompt
+    assert "AARO" in llm.last_prompt
+    assert "military witness + radar corroboration" in llm.last_prompt
+
+
+def test_raises_when_llm_returns_invalid_json():
+    llm = FakeLLMClient("not valid json")
+    use_case = StoryWritingUseCase(llm_client=llm)
+
+    with pytest.raises(StoryGenerationError):
+        use_case.write_story(
+            document_text=DOCUMENT_TEXT,
+            agency="AARO",
+            doc_type="report",
+            published_date="2024-03-01",
+            narrative_angle="angle",
+        )
+
+
+def test_raises_when_chapter_script_is_too_short():
+    payload = {"summary": "s", "chapters": [_chapter(script=_words(50))]}
+    use_case, _ = _use_case(payload)
+
+    with pytest.raises(StoryGenerationError):
+        use_case.write_story(
+            document_text=DOCUMENT_TEXT,
+            agency="AARO",
+            doc_type="report",
+            published_date="2024-03-01",
+            narrative_angle="angle",
+        )
+
+
+def test_raises_when_chapter_script_is_too_long():
+    payload = {"summary": "s", "chapters": [_chapter(script=_words(250))]}
+    use_case, _ = _use_case(payload)
+
+    with pytest.raises(StoryGenerationError):
+        use_case.write_story(
+            document_text=DOCUMENT_TEXT,
+            agency="AARO",
+            doc_type="report",
+            published_date="2024-03-01",
+            narrative_angle="angle",
+        )
+
+
+def test_raises_when_chapter_is_missing_source_citation():
+    payload = {"summary": "s", "chapters": [_chapter(source_citation="")]}
+    use_case, _ = _use_case(payload)
+
+    with pytest.raises(StoryGenerationError):
+        use_case.write_story(
+            document_text=DOCUMENT_TEXT,
+            agency="AARO",
+            doc_type="report",
+            published_date="2024-03-01",
+            narrative_angle="angle",
+        )
+
+
+def test_raises_when_chapter_contains_a_quote_absent_from_the_source_document():
+    fabricated_quote = 'The pilot said "we made direct contact with the occupants"'
+    payload = {
+        "summary": "s",
+        "chapters": [_chapter(script=_valid_script(extra=fabricated_quote))],
+    }
+    use_case, _ = _use_case(payload)
+
+    with pytest.raises(StoryGenerationError):
+        use_case.write_story(
+            document_text=DOCUMENT_TEXT,
+            agency="AARO",
+            doc_type="report",
+            published_date="2024-03-01",
+            narrative_angle="angle",
+        )
+
+
+def test_accepts_a_quote_that_appears_verbatim_in_the_source_document():
+    genuine_quote = 'The log states: "radar contact was lost at 0200 hours"'
+    payload = {
+        "summary": "s",
+        "chapters": [_chapter(script=_valid_script(extra=genuine_quote))],
+    }
+    use_case, _ = _use_case(payload)
+
+    draft = use_case.write_story(
+        document_text=DOCUMENT_TEXT,
+        agency="AARO",
+        doc_type="report",
+        published_date="2024-03-01",
+        narrative_angle="angle",
+    )
+
+    assert genuine_quote in draft.chapters[0].script
+
+
+@pytest.mark.parametrize(
+    "overstated_phrase",
+    [
+        "this is definitive proof of extraterrestrial contact",
+        "the government admitted the object was alien technology",
+    ],
+)
+def test_raises_when_chapter_contains_an_overstated_claim(overstated_phrase):
+    payload = {
+        "summary": "s",
+        "chapters": [_chapter(script=_valid_script(extra=overstated_phrase))],
+    }
+    use_case, _ = _use_case(payload)
+
+    with pytest.raises(StoryGenerationError):
+        use_case.write_story(
+            document_text=DOCUMENT_TEXT,
+            agency="AARO",
+            doc_type="report",
+            published_date="2024-03-01",
+            narrative_angle="angle",
+        )
