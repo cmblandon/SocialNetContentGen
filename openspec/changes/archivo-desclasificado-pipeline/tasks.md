@@ -73,18 +73,18 @@
 
 ## 5. Phase 5 — publishing
 
-- [ ] 5.1 Add the Postiz client dependency (or a plain `httpx`-based adapter against its API) to `requirements.txt`
-- [ ] 5.2 Write failing tests for the Postiz `ISocialPublisher` implementation against a mocked HTTP layer (schedule/publish call, returned post ID capture, error surfacing)
-- [ ] 5.3 Implement the Postiz publisher adapter to make 5.2 pass
-- [ ] 5.4 Write failing tests for `PublishingUseCase`: publish only when status is `approved`, use the calendar-defined optimal time or propose-and-hold-for-approval when undefined, record every outcome in `/calendario.md` with network/time/post ID, and report-without-silent-repeat-retry on failure — per `specs/publishing/spec.md`
-- [ ] 5.5 Implement `PublishingUseCase` to make 5.4 pass
-- [ ] 5.6 Wire `PublishingUseCase` into the orchestrator so it fires only after the Phase 3 approval gate observes `approved`
-- [ ] 5.7 Write failing tests for a `GET /publish-records` (list/status) endpoint the admin panel will consume in Phase 6
-- [ ] 5.8 Implement the `GET /publish-records` endpoint to make 5.7 pass
-- [ ] 5.9 Review and Update Existing Unit Tests (MANDATORY)
-- [ ] 5.10 Run Unit Tests and Verify Database State (MANDATORY) — report at `openspec/changes/archivo-desclasificado-pipeline/reports/<YYYY-MM-DD>-step-5.10-unit-test-and-db-verification.md`
-- [ ] 5.11 Manual Endpoint Testing with curl (MANDATORY — AGENT MUST EXECUTE): approve a seeded pending item via the Phase 3 endpoint, trigger publishing, `curl -X GET http://localhost:8000/publish-records`, verify the resulting record and calendar entry, test the failure path against a mocked API error and confirm no silent second retry, restore DB state, document commands/responses in the phase report
-- [ ] 5.12 Update Technical Documentation (MANDATORY): document the publisher port and how to swap Postiz for Ayrshare/Blotato later
+- [x] 5.1 Add the Postiz client dependency (or a plain `httpx`-based adapter against its API) to `requirements.txt` — implemented via raw `httpx`, same symmetric approach as the Phase 4 scraper adapters; no new dependency needed
+- [x] 5.2 Write failing tests for the Postiz `ISocialPublisher` implementation against a mocked HTTP layer (schedule/publish call, returned post ID capture, error surfacing)
+- [x] 5.3 Implement the Postiz publisher adapter to make 5.2 pass
+- [x] 5.4 Write failing tests for `PublishingUseCase`: publish only when status is `approved`, use the calendar-defined optimal time or propose-and-hold-for-approval when undefined, record every outcome in `/calendario.md` with network/time/post ID, and report-without-silent-repeat-retry on failure — per `specs/publishing/spec.md`
+- [x] 5.5 Implement `PublishingUseCase` to make 5.4 pass
+- [x] 5.6 Wire `PublishingUseCase` into the orchestrator so it fires only after the Phase 3 approval gate observes `approved` — `POST /platform-versions/{id}/approve` now invokes it immediately after recording the approval, per specs/editorial-orchestration's "orchestrator proceeds to publishing" requirement
+- [x] 5.7 Write failing tests for a `GET /publish-records` (list/status) endpoint the admin panel will consume in Phase 6
+- [x] 5.8 Implement the `GET /publish-records` endpoint to make 5.7 pass
+- [x] 5.9 Review and Update Existing Unit Tests (MANDATORY) — extended `tests/unit/test_approval_endpoints.py` with the new publishing-wiring tests (5.6) since approve() now depends on `get_publishing_use_case`
+- [x] 5.10 Run Unit Tests and Verify Database State (MANDATORY) — report at `openspec/changes/archivo-desclasificado-pipeline/reports/<YYYY-MM-DD>-step-5.10-unit-test-and-db-verification.md` (documents and resolves a real interim mutation caught during this step — see report)
+- [x] 5.11 Manual Endpoint Testing with curl (MANDATORY — AGENT MUST EXECUTE): approved two seeded pending items via the Phase 3 endpoint against a real server/DB — one exercising the propose-time path, one exercising a real (naturally-occurring) publish failure — verified `GET /publish-records` and the calendar entries, confirmed no silent retry (409 on re-approval), restored DB state
+- [x] 5.12 Update Technical Documentation (MANDATORY): document the publisher port and how to swap Postiz for Ayrshare/Blotato later
 
 ## 6. Phase 6 — content-admin-panel (Next.js)
 

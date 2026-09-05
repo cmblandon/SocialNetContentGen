@@ -7,13 +7,11 @@ Each dependency is its own FastAPI provider function so tests can override
 individual pieces (research_agent, case_curation, the use cases) with
 fakes, the same pattern already used for get_session.
 """
-from pathlib import Path
-
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from src.config.settings import DATA_DIR, settings
+from src.config.settings import settings
 from src.editorial.application.case_curation_use_case import CaseCurationUseCase
 from src.editorial.application.orchestrator import run_research_cycle
 from src.editorial.application.platform_adaptation_use_case import (
@@ -28,10 +26,9 @@ from src.editorial.infrastructure.scraping.firecrawl_scraper import (
     FirecrawlScraperAdapter,
 )
 from src.editorial.infrastructure.scraping.jina_scraper import JinaScraperAdapter
+from src.editorial.presentation.dependencies import get_llm_client, get_memory_store
 
 router = APIRouter(prefix="/research", tags=["research"])
-
-EDITORIAL_MEMORY_DIR = DATA_DIR / "knowledge_base" / "editorial_memory"
 
 
 class ResearchRunRequest(BaseModel):
@@ -44,14 +41,6 @@ class ResearchRunResponse(BaseModel):
     chapters_generated: int
     pending_approval_platform_version_ids: list[str]
     discarded_document_ids: list[str]
-
-
-def get_memory_store() -> ProjectMemoryStore:
-    return ProjectMemoryStore(memory_dir=EDITORIAL_MEMORY_DIR)
-
-
-def get_llm_client() -> AnthropicLLMClient:
-    return AnthropicLLMClient(api_key=settings.anthropic_api_key)
 
 
 def get_research_agent(

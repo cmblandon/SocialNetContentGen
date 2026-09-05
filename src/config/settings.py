@@ -65,6 +65,10 @@ class Settings(BaseSettings):
     jina_api_key: str = ""
     firecrawl_api_key: str = ""
 
+    # --- Publisher (editorial service, Phase 5) ---
+    postiz_api_key: str = ""
+    postiz_base_url: str = "http://localhost:5000"
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

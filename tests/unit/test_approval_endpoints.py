@@ -28,8 +28,20 @@ from src.editorial.infrastructure.persistence.models import (
     Document,
     PlatformVersion,
 )
+from src.editorial.application.publishing_use_case import PublishOutcome
 from src.editorial.infrastructure.persistence.session import get_session
 from src.editorial.presentation.app import app
+from src.editorial.presentation.dependencies import get_publishing_use_case
+
+
+class FakePublishingUseCase:
+    def __init__(self, outcome: PublishOutcome):
+        self._outcome = outcome
+        self.calls: list[str] = []
+
+    def publish(self, session, platform_version_id):
+        self.calls.append(platform_version_id)
+        return self._outcome
 
 
 @pytest.fixture
@@ -44,7 +56,12 @@ def test_engine():
 
 
 @pytest.fixture
-def client(test_engine):
+def fake_publishing_use_case():
+    return FakePublishingUseCase(PublishOutcome(published=False, proposed_time="12:00"))
+
+
+@pytest.fixture
+def client(test_engine, fake_publishing_use_case):
     TestSessionLocal = sessionmaker(bind=test_engine)
 
     def override_get_session():
@@ -55,6 +72,7 @@ def client(test_engine):
             session.close()
 
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_publishing_use_case] = lambda: fake_publishing_use_case
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -134,3 +152,26 @@ def test_reject_an_already_decided_item_returns_409(client, pending_platform_ver
     response = client.post(f"/platform-versions/{pending_platform_version_id}/reject")
 
     assert response.status_code == 409
+
+
+def test_approve_triggers_publishing_and_includes_the_outcome(
+    client, pending_platform_version_id, fake_publishing_use_case
+):
+    """Requirement (specs/editorial-orchestration): approving is what makes
+    the orchestrator 'proceed to publishing' for that chapter."""
+    response = client.post(f"/platform-versions/{pending_platform_version_id}/approve")
+
+    assert response.status_code == 200
+    assert fake_publishing_use_case.calls == [pending_platform_version_id]
+    assert response.json()["publish_outcome"] == {
+        "published": False,
+        "external_post_id": None,
+        "error_message": None,
+        "proposed_time": "12:00",
+    }
+
+
+def test_reject_never_triggers_publishing(client, pending_platform_version_id, fake_publishing_use_case):
+    client.post(f"/platform-versions/{pending_platform_version_id}/reject")
+
+    assert fake_publishing_use_case.calls == []

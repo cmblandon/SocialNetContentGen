@@ -158,6 +158,8 @@ src/editorial/
 │   │   ├── jina_scraper.py              # Default ISourceScraper (cheap, raw text)
 │   │   ├── firecrawl_scraper.py         # Fallback ISourceScraper (AI-structured)
 │   │   └── doc_type.py                  # Shared URL-extension -> doc_type heuristic
+│   ├── publishing/
+│   │   └── postiz_publisher.py          # Default ISocialPublisher (self-hosted Postiz)
 │   └── persistence/
 │       ├── models.py        # SQLAlchemy models: Document, Story, Chapter,
 │       │                    # PlatformVersion, PublishRecord
@@ -167,9 +169,11 @@ src/editorial/
 │       └── migrations/      # Alembic environment + revisions
 └── presentation/
     ├── app.py                # FastAPI composition root (routers added per phase)
+    ├── dependencies.py       # Shared DI providers (memory store, LLM client, publisher)
     └── routers/
         ├── approval.py       # POST /platform-versions/{id}/approve|reject
-        └── research.py       # POST /research/run
+        ├── research.py       # POST /research/run
+        └── publish_records.py # GET /publish-records
 ```
 
 ### Research sources and the scraper fallback
@@ -220,6 +224,28 @@ Orchestration lives in two deliberately separate places:
   `pending_review`, and updates `casos_cubiertos.md`. This does not need
   the LLM in the loop and must behave identically every run.
 
+### Publishing and the publisher swap mechanism
+
+Publishing goes through `ISocialPublisher` (design.md Decision 7):
+`PostizPublisherAdapter` is the default (self-hosted Postiz, raw HTTP).
+Swap it for Ayrshare, Blotato, or anything else by writing a new class
+satisfying `ISocialPublisher` (`publish(platform, content, scheduled_at) ->
+PublishResult`) and pointing `dependencies.get_publisher()` at it — nothing
+in `PublishingUseCase` or the approval flow changes. Configure via `.env`:
+`POSTIZ_API_KEY`, `POSTIZ_BASE_URL` (defaults to `http://localhost:5000`,
+i.e. a local self-hosted instance).
+
+`PublishingUseCase.publish()` is only ever reachable through
+`approval_gate.run_if_approved` — it makes exactly one publish attempt per
+call and never retries automatically; a failure leaves the
+`PlatformVersion` in `FAILED`, which the approval gate then refuses to act
+on again without a fresh, explicit approval (see
+`specs/publishing/spec.md`, "report failures without silent repeated
+retries"). Scheduling reads an `optimal_time:<platform>=HH:MM` line from
+`calendario.md`; if none exists for the platform, it proposes
+`DEFAULT_PROPOSED_TIME` (`12:00`) as a new line and does **not** publish —
+per spec, publishing immediately without a defined time is not allowed.
+
 ### Running the editorial API locally
 
 ```bash
@@ -236,16 +262,22 @@ python3 -m alembic upgrade head
 - `POST /platform-versions/{id}/approve` / `POST /platform-versions/{id}/reject`
   — the Phase 3 stand-in for the real admin panel (Phase 6). This is the
   human-approval gate: a `PlatformVersion` starts `pending_review` and stays
-  there until one of these is called; nothing (no future publisher) is
-  allowed to act on it until its status is `approved` (enforced by
-  `approval_gate.run_if_approved`, not by convention). An already-decided
-  item returns `409`; an unknown id returns `404`.
+  there until one of these is called; nothing is allowed to act on it until
+  its status is `approved` (enforced by `approval_gate.run_if_approved`,
+  not by convention). An already-decided item returns `409`; an unknown id
+  returns `404`. **Approving immediately triggers `PublishingUseCase`**
+  (Phase 5) — the response's `publish_outcome` reports whether it actually
+  published, only proposed a time, or failed (never a silent retry; see
+  the "Publishing" section above).
 - `POST /research/run` — the manual trigger for a research+curation pass
   (design.md defers autonomous daily/cron scheduling as a Non-Goal; call
   this yourself when you want a new cycle). Body: `{"source_urls": [...]}`
   (at least one required). Runs discover → curate → write → adapt →
   persist for every URL that clears the allowlist, dedup, and curation
   threshold, and returns the same summary shape as `run_cycle`.
+- `GET /publish-records` — lists every publish attempt (platform, status,
+  external post id, scheduled/published timestamps, error message) — the
+  read model the Phase 6 admin panel's calendar view will consume.
 
 ### Running the manual story + platform-adaptation CLI
 
