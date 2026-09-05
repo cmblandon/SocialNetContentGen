@@ -1,372 +1,163 @@
 # Data Model Documentation
 
-This document describes the data model for the LTI (Learning Tracking Initiative) application, including entity descriptions, field definitions, relationships, and an entity-relationship diagram.
+This project has two independent data stores, owned by two independent bounded
+contexts. They are not foreign-keyed to each other at the database level —
+the link between them is a plain reference id (see `Document.source_ficha_id`
+below) because they live in separate SQLite files.
 
-## Model Descriptions
+## 1. Ingestion pipeline (`data/knowledge_base/expedientes.sqlite`)
 
-### 1. Candidate
-Represents a job candidate who can apply for positions within the system.
+Owned by `src/infrastructure/persistence/sqlite_repo.py`. A single table,
+`documentos`, storing one row per depurated PDF:
 
-**Fields:**
-- `id`: Unique identifier for the candidate (Primary Key)
-- `firstName`: Candidate's first name (max 100 characters)
-- `lastName`: Candidate's last name (max 100 characters)
-- `email`: Candidate's unique email address (max 255 characters)
-- `phone`: Candidate's phone number (optional, max 15 characters)
-- `address`: Candidate's address (optional, max 100 characters)
+| Column | Type | Notes |
+|---|---|---|
+| `id` | TEXT (PK) | Generated from filename + size (see `IngestUseCase`) |
+| `archivo_origen` | TEXT | Original filename |
+| `fecha_documento` | TEXT | Extracted by the local LLM, may be null |
+| `organismo_emisor` | TEXT | Extracted by the local LLM, may be null |
+| `resumen_ejecutivo` | TEXT | Depurated executive summary |
+| `fragmentos_clave` | TEXT (JSON array) | Key excerpts, serialized as JSON |
+| `nivel_redaccion` | TEXT | Local-LLM's confidence in its own writing quality |
+| `confiabilidad_extraccion` | TEXT | `"baja"` flags a document for manual review |
+| `idioma_original` | TEXT | Original language of the source document |
+| `fecha_ingesta` | TEXT | ISO-8601 UTC timestamp, set automatically |
 
-**Validation Rules:**
-- First name and last name are required, 2-100 characters, letters only
-- Email is required, must be unique, and follow valid email format
-- Phone is optional but must follow Spanish format (6|7|9)XXXXXXXX if provided
-- Address is optional but cannot exceed 100 characters
-- Maximum of 3 education records per candidate
+Corresponds to the `FichaEstructurada` dataclass in `src/core/entities.py`.
+This table is not managed by Alembic and is not part of the editorial schema
+below.
 
-**Relationships:**
-- `educations`: One-to-many relationship with Education model
-- `workExperiences`: One-to-many relationship with WorkExperience model
-- `resumes`: One-to-many relationship with Resume model
-- `applications`: One-to-many relationship with Application model
+## 2. Editorial schema (`data/knowledge_base/editorial.sqlite`)
 
-### 2. Education
-Represents educational background information for candidates.
+Owned by `src/editorial/infrastructure/persistence/models.py`, managed by
+Alembic (`alembic.ini`, `src/editorial/infrastructure/persistence/migrations/`).
+Implements the `Document → Story → Chapter → PlatformVersion → PublishRecord`
+chain from the `archivo-desclasificado-pipeline` OpenSpec change
+(`openspec/changes/archivo-desclasificado-pipeline/design.md`, Decision 3-5).
 
-**Fields:**
-- `id`: Unique identifier for the education record (Primary Key)
-- `institution`: Name of the educational institution (max 100 characters)
-- `title`: Degree or certification title obtained (max 250 characters)
-- `startDate`: Start date of the education period
-- `endDate`: End date of the education period (optional, null if ongoing)
-- `candidateId`: Foreign key referencing the Candidate
+### Document
+An editorial case record: either produced by `research-agent` from a scraped
+official source, or referencing a manually-ingested `FichaEstructurada`.
 
-**Validation Rules:**
-- Institution is required and cannot exceed 100 characters
-- Title is required and cannot exceed 250 characters
-- Start date is required and must be in valid date format
-- End date is optional but must be valid if provided
-- Maximum of 3 education records per candidate
+- `id` (PK, string UUID)
+- `title`, `agency`, `doc_type` — required
+- `published_date`, `source_url`, `extraction_confidence` — optional
+- `extracted_text` — required, full text or faithful summary
+- `source_ficha_id` — optional; when set, references a row's `id` in the
+  ingestion pipeline's `documentos` table (see §1). Not a real foreign key —
+  the two tables live in separate SQLite files.
+- `created_at`
 
-**Relationships:**
-- `candidate`: Many-to-one relationship with Candidate model
+**Relationships:** one Document has many Stories (cascade delete).
 
-### 3. WorkExperience
-Represents work history and professional experience for candidates.
+### Story
+The narrative generated from a curated Document.
 
-**Fields:**
-- `id`: Unique identifier for the work experience record (Primary Key)
-- `company`: Name of the company or organization (max 100 characters)
-- `position`: Job title or position held (max 100 characters)
-- `description`: Description of responsibilities and achievements (optional, max 200 characters)
-- `startDate`: Start date of the work experience
-- `endDate`: End date of the work experience (optional, null if current)
-- `candidateId`: Foreign key referencing the Candidate
+- `id` (PK), `document_id` (FK → `documents.id`)
+- `summary` — required
+- `narrative_angle` — the curator's note on why the case works as a story (optional)
+- `created_at`
 
-**Validation Rules:**
-- Company name is required and cannot exceed 100 characters
-- Position is required and cannot exceed 100 characters
-- Description is optional but cannot exceed 200 characters if provided
-- Start date is required and must be in valid date format
-- End date is optional but must be valid if provided
+**Relationships:** one Story has many Chapters, ordered by `chapter_index` (cascade delete).
 
-**Relationships:**
-- `candidate`: Many-to-one relationship with Candidate model
+### Chapter
+One chapter of a Story (a single piece if the story isn't split).
 
-### 4. Resume
-Represents uploaded resume files associated with candidates.
+- `id` (PK), `story_id` (FK → `stories.id`)
+- `chapter_index` — integer, defines playback/publish order
+- `title`, `script`, `source_citation` — required
+- `visual_notes` — optional (per-line visual suggestions)
+- `created_at`
 
-**Fields:**
-- `id`: Unique identifier for the resume record (Primary Key)
-- `filePath`: File system path to the uploaded resume (max 500 characters)
-- `fileType`: MIME type or file extension of the resume (max 50 characters)
-- `uploadDate`: Date and time when the resume was uploaded
-- `candidateId`: Foreign key referencing the Candidate
+**Relationships:** one Chapter has many PlatformVersions (cascade delete).
 
-**Validation Rules:**
-- File path is required and cannot exceed 500 characters
-- File type is required and cannot exceed 50 characters
-- Upload date is automatically set when file is uploaded
-- Supported file types: PDF and DOCX (max 10MB)
+### PlatformVersion
+A Chapter adapted for one network, carrying the human-approval status.
 
-**Relationships:**
-- `candidate`: Many-to-one relationship with Candidate model
+- `id` (PK), `chapter_id` (FK → `chapters.id`)
+- `platform` — enum: `tiktok`, `instagram`, `x`, `facebook`
+- `content` — the adapted text/thread/carousel payload
+- `status` — enum: `pending_review` (default), `approved`, `rejected`, `published`, `failed`
+- `created_at`, `updated_at`
 
-### 5. Company
-Represents companies that post job positions and employ staff.
+**Relationships:** one PlatformVersion has many PublishRecords (cascade delete).
 
-**Fields:**
-- `id`: Unique identifier for the company (Primary Key)
-- `name`: Unique company name
+> `status` is the structural enforcement of the human-approval gate (design.md
+> Decision 5): the publisher never acts on a PlatformVersion whose status
+> isn't `approved`.
 
-**Relationships:**
-- `employees`: One-to-many relationship with Employee model
-- `positions`: One-to-many relationship with Position model
+### PublishRecord
+The outcome of one publish/schedule attempt for a PlatformVersion.
 
-### 6. Employee
-Represents employees within companies who can conduct interviews.
+- `id` (PK), `platform_version_id` (FK → `platform_versions.id`)
+- `scheduled_at`, `published_at` — optional timestamps
+- `external_post_id` — the social API's returned post id, for later metrics correlation
+- `status` — same enum as PlatformVersion
+- `error_message` — set on failure
+- `created_at`
 
-**Fields:**
-- `id`: Unique identifier for the employee (Primary Key)
-- `name`: Employee's full name
-- `email`: Employee's unique email address
-- `role`: Employee's role or job title
-- `isActive`: Boolean indicating if the employee is currently active
-- `companyId`: Foreign key referencing the Company
-
-**Relationships:**
-- `company`: Many-to-one relationship with Company model
-- `interviews`: One-to-many relationship with Interview model
-
-### 7. InterviewType
-Defines different types of interviews that can be conducted.
-
-**Fields:**
-- `id`: Unique identifier for the interview type (Primary Key)
-- `name`: Name of the interview type (e.g., "Technical", "HR", "Behavioral")
-- `description`: Detailed description of the interview type (optional)
-
-**Relationships:**
-- `interviewSteps`: One-to-many relationship with InterviewStep model
-
-### 8. InterviewFlow
-Represents a sequence of interview steps that define the hiring process.
-
-**Fields:**
-- `id`: Unique identifier for the interview flow (Primary Key)
-- `description`: Description of the interview flow process (optional)
-
-**Relationships:**
-- `interviewSteps`: One-to-many relationship with InterviewStep model
-- `positions`: One-to-many relationship with Position model
-
-### 9. InterviewStep
-Represents individual steps within an interview flow.
-
-**Fields:**
-- `id`: Unique identifier for the interview step (Primary Key)
-- `name`: Name of the interview step
-- `orderIndex`: Numeric order of this step within the flow
-- `interviewFlowId`: Foreign key referencing the InterviewFlow
-- `interviewTypeId`: Foreign key referencing the InterviewType
-
-**Relationships:**
-- `interviewFlow`: Many-to-one relationship with InterviewFlow model
-- `interviewType`: Many-to-one relationship with InterviewType model
-- `applications`: One-to-many relationship with Application model
-- `interviews`: One-to-many relationship with Interview model
-
-### 10. Position
-Represents job positions available for application.
-
-**Fields:**
-- `id`: Unique identifier for the position (Primary Key)
-- `companyId`: Foreign key referencing the Company (required)
-- `interviewFlowId`: Foreign key referencing the InterviewFlow (required)
-- `title`: Job title (required, max 100 characters)
-- `description`: Brief description of the position (required)
-- `status`: Current status of the position (default: "Draft", valid values: Open, Contratado, Cerrado, Borrador)
-- `isVisible`: Boolean indicating if the position is publicly visible (default: false)
-- `location`: Job location (required)
-- `jobDescription`: Detailed job description (required)
-- `requirements`: Job requirements and qualifications (optional)
-- `responsibilities`: Job responsibilities (optional)
-- `salaryMin`: Minimum salary range (optional, must be >= 0)
-- `salaryMax`: Maximum salary range (optional, must be >= 0 and >= salaryMin)
-- `employmentType`: Type of employment (e.g., "Full-time", "Part-time", "Contract") (optional)
-- `benefits`: Job benefits description (optional)
-- `companyDescription`: Description of the hiring company (optional)
-- `applicationDeadline`: Deadline for applications (optional, must be a future date)
-- `contactInfo`: Contact information for inquiries (optional)
-
-**Validation Rules:**
-- Title is required and cannot exceed 100 characters
-- Description, location, and jobDescription are required fields
-- Status must be one of: Open, Contratado, Cerrado, Borrador
-- Company and interview flow references must exist in the database
-- Salary values must be non-negative numbers
-- Application deadline must be a future date if provided
-
-**Relationships:**
-- `company`: Many-to-one relationship with Company model
-- `interviewFlow`: Many-to-one relationship with InterviewFlow model
-- `applications`: One-to-many relationship with Application model
-
-### 11. Application
-Represents a candidate's application to a specific position.
-
-**Fields:**
-- `id`: Unique identifier for the application (Primary Key)
-- `applicationDate`: Date when the application was submitted
-- `currentInterviewStep`: Current step in the interview process
-- `notes`: Additional notes about the application (optional)
-- `positionId`: Foreign key referencing the Position
-- `candidateId`: Foreign key referencing the Candidate
-- `interviewStepId`: Foreign key referencing the current InterviewStep
-
-**Relationships:**
-- `position`: Many-to-one relationship with Position model
-- `candidate`: Many-to-one relationship with Candidate model
-- `interviewStep`: Many-to-one relationship with InterviewStep model
-- `interviews`: One-to-many relationship with Interview model
-
-### 12. Interview
-Represents individual interview sessions conducted as part of an application.
-
-**Fields:**
-- `id`: Unique identifier for the interview (Primary Key)
-- `interviewDate`: Date and time of the interview
-- `result`: Interview result or outcome (optional)
-- `score`: Numeric score or rating from the interview (optional)
-- `notes`: Interview notes and feedback (optional)
-- `applicationId`: Foreign key referencing the Application
-- `interviewStepId`: Foreign key referencing the InterviewStep
-- `employeeId`: Foreign key referencing the conducting Employee
-
-**Relationships:**
-- `application`: Many-to-one relationship with Application model
-- `interviewStep`: Many-to-one relationship with InterviewStep model
-- `employee`: Many-to-one relationship with Employee model
-
-## Entity Relationship Diagram
+## Entity Relationship Diagram (editorial schema)
 
 ```mermaid
 erDiagram
-    Candidate {
-        Int id PK
-        String firstName
-        String lastName
-        String email UK
-        String phone
-        String address
+    Document {
+        string id PK
+        string title
+        string agency
+        string doc_type
+        string published_date
+        string source_url
+        string extracted_text
+        string extraction_confidence
+        string source_ficha_id
+        datetime created_at
     }
-    Education {
-        Int id PK
-        String institution
-        String title
-        DateTime startDate
-        DateTime endDate
-        Int candidateId FK
+    Story {
+        string id PK
+        string document_id FK
+        string summary
+        string narrative_angle
+        datetime created_at
     }
-    WorkExperience {
-        Int id PK
-        String company
-        String position
-        String description
-        DateTime startDate
-        DateTime endDate
-        Int candidateId FK
+    Chapter {
+        string id PK
+        string story_id FK
+        int chapter_index
+        string title
+        string script
+        string visual_notes
+        string source_citation
+        datetime created_at
     }
-    Resume {
-        Int id PK
-        String filePath
-        String fileType
-        DateTime uploadDate
-        Int candidateId FK
+    PlatformVersion {
+        string id PK
+        string chapter_id FK
+        string platform
+        string content
+        string status
+        datetime created_at
+        datetime updated_at
     }
-    Company {
-        Int id PK
-        String name UK
-    }
-    Employee {
-        Int id PK
-        String name
-        String email UK
-        String role
-        Boolean isActive
-        Int companyId FK
-    }
-    InterviewType {
-        Int id PK
-        String name
-        String description
-    }
-    InterviewFlow {
-        Int id PK
-        String description
-    }
-    InterviewStep {
-        Int id PK
-        String name
-        Int orderIndex
-        Int interviewFlowId FK
-        Int interviewTypeId FK
-    }
-    Position {
-        Int id PK
-        String title
-        String description
-        String status
-        Boolean isVisible
-        String location
-        String jobDescription
-        String requirements
-        String responsibilities
-        Float salaryMin
-        Float salaryMax
-        String employmentType
-        String benefits
-        String companyDescription
-        DateTime applicationDeadline
-        String contactInfo
-        Int companyId FK
-        Int interviewFlowId FK
-    }
-    Application {
-        Int id PK
-        DateTime applicationDate
-        Int currentInterviewStep
-        String notes
-        Int positionId FK
-        Int candidateId FK
-        Int interviewStepId FK
-    }
-    Interview {
-        Int id PK
-        DateTime interviewDate
-        String result
-        Int score
-        String notes
-        Int applicationId FK
-        Int interviewStepId FK
-        Int employeeId FK
+    PublishRecord {
+        string id PK
+        string platform_version_id FK
+        datetime scheduled_at
+        datetime published_at
+        string external_post_id
+        string status
+        string error_message
+        datetime created_at
     }
 
-    Candidate ||--o{ Education : "has"
-    Candidate ||--o{ WorkExperience : "has"
-    Candidate ||--o{ Resume : "has"
-    Candidate ||--o{ Application : "submits"
-    
-    Company ||--o{ Employee : "employs"
-    Company ||--o{ Position : "offers"
-    
-    InterviewType ||--o{ InterviewStep : "defines"
-    InterviewFlow ||--o{ InterviewStep : "includes"
-    InterviewFlow ||--o{ Position : "guides"
-    
-    Position ||--o{ Application : "receives"
-    Application ||--o{ Interview : "includes"
-    
-    InterviewStep ||--o{ Application : "current_step"
-    InterviewStep ||--o{ Interview : "conducted_at"
-    
-    Employee ||--o{ Interview : "conducts"
+    Document ||--o{ Story : "generates"
+    Story ||--o{ Chapter : "splits into"
+    Chapter ||--o{ PlatformVersion : "adapted as"
+    PlatformVersion ||--o{ PublishRecord : "publish attempts"
 ```
 
-## Key Design Principles
+## Status
 
-1. **Referential Integrity**: All foreign key relationships ensure data consistency across the system.
-
-2. **Flexibility**: The interview flow system allows for customizable hiring processes per position.
-
-3. **Audit Trail**: Application and interview dates provide a complete timeline of the hiring process.
-
-4. **Extensibility**: The modular design allows for easy addition of new features and data points.
-
-5. **Data Normalization**: The model follows database normalization principles to minimize redundancy and ensure data integrity.
-
-## Notes
-
-- All `id` fields serve as primary keys with auto-increment functionality
-- Foreign key relationships maintain referential integrity
-- Optional fields allow for flexible data entry while maintaining required core information
-- The interview system supports multi-step hiring processes with different types of interviews
-- Email fields have unique constraints to prevent duplicate accounts 
+As of Phase 1 of `archivo-desclasificado-pipeline`, all five editorial tables
+above exist and are covered by `tests/unit/test_editorial_models.py` and
+`tests/unit/test_editorial_migrations.py`. No rows are written to them yet by
+any use case — that starts in Phase 2 (`story-writing`/`platform-adaptation`).
