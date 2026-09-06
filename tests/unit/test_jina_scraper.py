@@ -118,3 +118,31 @@ def test_fetch_uses_a_generic_title_when_no_markdown_heading_is_present():
     document = adapter.fetch("https://www.aaro.mil/reports/untitled.pdf")
 
     assert document.title == "untitled.pdf"
+
+
+def test_fetch_accepts_a_query_without_changing_the_request():
+    """research-query-scoping: Jina's reader has no query mode — passing a
+    query is a documented no-op, not an error, and must not alter the
+    outbound request in any way."""
+    client = FakeHttpClient(FakeResponse(200, "# Title\nbody"))
+    adapter = JinaScraperAdapter(api_key="test-key", client=client)
+
+    document = adapter.fetch("https://www.aaro.mil/reports/2024.pdf", query="missile silos")
+
+    assert client.last_url == "https://r.jina.ai/https://www.aaro.mil/reports/2024.pdf"
+    assert client.last_headers["Authorization"] == "Bearer test-key"
+    assert document is not None
+    assert document.title == "Title"
+
+
+def test_fetch_with_and_without_a_query_produces_the_same_request():
+    client_without_query = FakeHttpClient(FakeResponse(200, "# Title\nbody"))
+    adapter_without_query = JinaScraperAdapter(api_key="test-key", client=client_without_query)
+    client_with_query = FakeHttpClient(FakeResponse(200, "# Title\nbody"))
+    adapter_with_query = JinaScraperAdapter(api_key="test-key", client=client_with_query)
+
+    adapter_without_query.fetch("https://www.aaro.mil/reports/2024.pdf")
+    adapter_with_query.fetch("https://www.aaro.mil/reports/2024.pdf", query="missile silos")
+
+    assert client_without_query.last_url == client_with_query.last_url
+    assert client_without_query.last_headers == client_with_query.last_headers

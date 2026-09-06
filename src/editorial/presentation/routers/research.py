@@ -7,6 +7,8 @@ Each dependency is its own FastAPI provider function so tests can override
 individual pieces (research_agent, case_curation, the use cases) with
 fakes, the same pattern already used for get_session.
 """
+from typing import Optional
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -33,6 +35,7 @@ router = APIRouter(prefix="/research", tags=["research"])
 
 class ResearchRunRequest(BaseModel):
     source_urls: list[str] = Field(min_length=1)
+    query: Optional[str] = None
 
 
 class ResearchRunResponse(BaseModel):
@@ -60,6 +63,14 @@ def get_research_agent(
         if settings.firecrawl_api_key
         else None
     )
+    # research-query-scoping: ResearchAgentUseCase.discover() inverts its
+    # scraper try-order (fallback first) whenever a query is given, on the
+    # assumption that fallback_scraper here is the query-capable adapter
+    # (FirecrawlScraperAdapter) and primary_scraper is not (JinaScraperAdapter,
+    # which ignores query). If this wiring is ever changed to swap which
+    # adapter fills which slot, or to use different adapters entirely, that
+    # assumption must be re-verified — see ResearchAgentUseCase's module
+    # docstring and design.md Decision 2 / Risks.
     return ResearchAgentUseCase(primary_scraper, fallback_scraper, memory_store)
 
 
@@ -102,6 +113,7 @@ def run_research(
         story_writing_use_case=story_writing_use_case,
         platform_adaptation_use_case=platform_adaptation_use_case,
         memory_store=memory_store,
+        query=request.query,
     )
     return ResearchRunResponse(
         documents_reviewed=summary.documents_reviewed,

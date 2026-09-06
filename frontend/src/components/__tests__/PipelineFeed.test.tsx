@@ -202,3 +202,61 @@ test("the run-pipeline trigger is enabled and runs research when source URLs are
 
   expect(mockedApi.runResearch).toHaveBeenCalledWith(["https://www.aaro.mil/reports/2024.pdf"]);
 });
+
+test("renders a topic input next to the run-pipeline trigger", async () => {
+  mockedApi.fetchPendingChapters.mockResolvedValue([]);
+
+  render(<PipelineFeed />);
+
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: /ejecutar pipeline/i })).toBeInTheDocument()
+  );
+  expect(screen.getByLabelText(/tema/i)).toBeInTheDocument();
+});
+
+test("typing a topic and running the pipeline sends it as the query", async () => {
+  mockedApi.fetchPendingChapters.mockResolvedValue([]);
+  mockedApi.runResearch.mockResolvedValue({
+    documents_reviewed: 1,
+    stories_created: 1,
+    chapters_generated: 1,
+    pending_approval_platform_version_ids: [],
+    discarded_document_ids: [],
+  });
+  const user = userEvent.setup();
+
+  render(<PipelineFeed />);
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: /ejecutar pipeline/i })).toBeEnabled()
+  );
+
+  await user.type(screen.getByLabelText(/tema/i), "Malmstrom missile incidents");
+  await user.click(screen.getByRole("button", { name: /ejecutar pipeline/i }));
+
+  expect(mockedApi.runResearch).toHaveBeenCalledWith(
+    ["https://www.aaro.mil/reports/2024.pdf"],
+    "Malmstrom missile incidents"
+  );
+});
+
+test("running the pipeline with a whitespace-only topic omits the query argument", async () => {
+  mockedApi.fetchPendingChapters.mockResolvedValue([]);
+  mockedApi.runResearch.mockResolvedValue({
+    documents_reviewed: 1,
+    stories_created: 1,
+    chapters_generated: 1,
+    pending_approval_platform_version_ids: [],
+    discarded_document_ids: [],
+  });
+  const user = userEvent.setup();
+
+  render(<PipelineFeed />);
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: /ejecutar pipeline/i })).toBeEnabled()
+  );
+
+  await user.type(screen.getByLabelText(/tema/i), "   ");
+  await user.click(screen.getByRole("button", { name: /ejecutar pipeline/i }));
+
+  expect(mockedApi.runResearch).toHaveBeenCalledWith(["https://www.aaro.mil/reports/2024.pdf"]);
+});

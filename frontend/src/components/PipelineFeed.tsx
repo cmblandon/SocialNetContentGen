@@ -65,6 +65,7 @@ export default function PipelineFeed() {
   const [runStatus, setRunStatus] = useState<RunStatus>("idle");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
 
   const loadChapters = useCallback(async () => {
     try {
@@ -90,7 +91,12 @@ export default function PipelineFeed() {
     if (!sourceUrls || sourceUrls.length === 0) return;
     setRunStatus("running");
     try {
-      await runResearch(sourceUrls);
+      const trimmedQuery = query.trim();
+      if (trimmedQuery) {
+        await runResearch(sourceUrls, trimmedQuery);
+      } else {
+        await runResearch(sourceUrls);
+      }
       setRunStatus("done");
       await loadChapters();
     } catch {
@@ -162,6 +168,15 @@ export default function PipelineFeed() {
           <p>Revisa lo que encontró el sistema, aprueba y publica.</p>
         </div>
         <div className="run-cluster">
+          <div className="query-field">
+            <label htmlFor="research-query">Tema (opcional)</label>
+            <input
+              id="research-query"
+              placeholder="Ej. incidentes de radar en Malmstrom"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
           <span className={`status-pill${runStatus === "running" ? " working" : runStatus === "done" ? " done" : runStatus === "error" ? " error" : ""}`}>
             {runStatus === "running"
               ? "Ejecutando pipeline…"

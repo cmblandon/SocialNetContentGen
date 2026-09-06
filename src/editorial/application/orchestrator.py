@@ -12,6 +12,7 @@ and must behave identically every time (design.md Decision 6).
 """
 from dataclasses import dataclass, field
 from datetime import date
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -119,14 +120,20 @@ def run_research_cycle(
     story_writing_use_case: StoryWritingUseCase,
     platform_adaptation_use_case: PlatformAdaptationUseCase,
     memory_store: ProjectMemoryStore,
+    query: Optional[str] = None,
 ) -> CycleSummary:
     """
     Real input path (Phase 4), replacing the Phase 2 manual-curation CLI
     fixture: discover -> curate -> (only advanced documents) write/adapt/
     persist via run_cycle. A document that curation discards or has
     already evaluated never reaches story-writing.
+
+    research-query-scoping: `query` is forwarded unchanged to
+    research_agent.discover() — this function has no opinion on what a
+    query does or how scraper order is decided, that's entirely
+    ResearchAgentUseCase's concern (see its module docstring).
     """
-    research_result = research_agent.discover(source_urls)
+    research_result = research_agent.discover(source_urls, query=query)
 
     documents_with_angles: list[tuple[Document, str]] = []
     for scraped_document in research_result.documents:

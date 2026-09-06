@@ -23,7 +23,10 @@ class JinaScraperAdapter:
         self._api_key = api_key
         self._client = client or httpx.Client()
 
-    def fetch(self, source_url: str) -> Optional[ScrapedDocument]:
+    def fetch(self, source_url: str, query: Optional[str] = None) -> Optional[ScrapedDocument]:
+        # `query` is accepted for ISourceScraper compatibility but unused:
+        # Jina's plain reader endpoint has no query-guided extraction mode
+        # (research-query-scoping design.md) — it always returns the full page.
         headers = {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
 
         response = self._client.get(

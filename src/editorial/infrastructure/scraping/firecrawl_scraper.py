@@ -24,10 +24,16 @@ class FirecrawlScraperAdapter:
         self._api_key = api_key
         self._client = client or httpx.Client()
 
-    def fetch(self, source_url: str) -> Optional[ScrapedDocument]:
+    def fetch(self, source_url: str, query: Optional[str] = None) -> Optional[ScrapedDocument]:
+        payload: dict = {"urls": [source_url]}
+        if query:
+            # research-query-scoping: guide Firecrawl's extraction toward
+            # the operator's topic instead of a generic full-page summary.
+            payload["prompt"] = query
+
         response = self._client.post(
             FIRECRAWL_EXTRACT_URL,
-            json={"urls": [source_url]},
+            json=payload,
             headers={"Authorization": f"Bearer {self._api_key}"},
             timeout=DEFAULT_TIMEOUT_SECONDS,
         )

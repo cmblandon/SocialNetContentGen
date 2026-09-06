@@ -37,12 +37,17 @@ class ISourceScraper(Protocol):
     Implementations: JinaScraperAdapter (default), FirecrawlScraperAdapter (fallback).
     """
 
-    def fetch(self, source_url: str) -> Optional[ScrapedDocument]:
+    def fetch(self, source_url: str, query: Optional[str] = None) -> Optional[ScrapedDocument]:
         """
         Fetches and extracts a structured record from source_url.
         Returns None when the source is inaccessible, login-protected, or
         cannot be verified as an official/primary source — per
         specs/research-agent/spec.md, this is a discard, not an error.
+
+        `query` (research-query-scoping) is an optional topic/focus hint an
+        implementation MAY use to guide extraction toward relevant content
+        instead of the whole page — not every implementation supports this
+        (e.g. JinaScraperAdapter's reader has no query mode and ignores it).
         """
         ...
 

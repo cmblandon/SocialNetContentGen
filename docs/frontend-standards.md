@@ -164,6 +164,11 @@ version reaches a terminal state):
   `POST /research/run` with that list, showing a status pill while the run
   is in flight; disabled with no configured source URLs (see
   Configuración below).
+- A "Tema (opcional)" text input next to "Ejecutar pipeline"
+  (`research-query-scoping`) lets the operator scope a run to a topic —
+  sent as `query` in the `POST /research/run` body only when non-empty
+  (trimmed client-side in both `PipelineFeed.tsx` and `runResearch()`
+  itself); leaving it blank reproduces the exact pre-existing behavior.
 
 ## Configuración
 

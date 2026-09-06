@@ -8,6 +8,8 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
+from typing import Optional
+
 from src.editorial.application.orchestrator import run_research_cycle
 from src.editorial.core.entities import (
     ChapterDraft,
@@ -40,10 +42,12 @@ def memory_store(tmp_path):
 class FakeResearchAgent:
     def __init__(self, documents: list[ScrapedDocument]):
         self._documents = documents
+        self.received_queries: list[Optional[str]] = []
 
-    def discover(self, source_urls):
+    def discover(self, source_urls, query=None):
         from src.editorial.application.research_agent_use_case import ResearchResult
 
+        self.received_queries.append(query)
         return ResearchResult(documents=self._documents, discarded=[])
 
 
@@ -168,3 +172,44 @@ def test_documents_curation_has_already_evaluated_are_skipped(session, memory_st
 
     assert summary.stories_created == 0
     assert case_curation.curated_titles == [document.title]
+
+
+def test_query_is_forwarded_to_the_research_agent_unchanged(session, memory_store):
+    document = _scraped_document()
+    research_agent = FakeResearchAgent([document])
+    case_curation = FakeCaseCuration({document.title: _curation_result(document)})
+    writer = FakeStoryWritingUseCase(_story())
+    adapter = FakePlatformAdaptationUseCase()
+
+    run_research_cycle(
+        session=session,
+        source_urls=["https://www.aaro.mil/reports/2024.pdf"],
+        research_agent=research_agent,
+        case_curation=case_curation,
+        story_writing_use_case=writer,
+        platform_adaptation_use_case=adapter,
+        memory_store=memory_store,
+        query="missile silo incidents",
+    )
+
+    assert research_agent.received_queries == ["missile silo incidents"]
+
+
+def test_omitting_query_forwards_none_to_the_research_agent(session, memory_store):
+    document = _scraped_document()
+    research_agent = FakeResearchAgent([document])
+    case_curation = FakeCaseCuration({document.title: _curation_result(document)})
+    writer = FakeStoryWritingUseCase(_story())
+    adapter = FakePlatformAdaptationUseCase()
+
+    run_research_cycle(
+        session=session,
+        source_urls=["https://www.aaro.mil/reports/2024.pdf"],
+        research_agent=research_agent,
+        case_curation=case_curation,
+        story_writing_use_case=writer,
+        platform_adaptation_use_case=adapter,
+        memory_store=memory_store,
+    )
+
+    assert research_agent.received_queries == [None]

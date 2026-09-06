@@ -46,8 +46,10 @@ from src.editorial.presentation.routers.research import (
 class FakeResearchAgent:
     def __init__(self, documents):
         self._documents = documents
+        self.received_queries: list = []
 
-    def discover(self, source_urls):
+    def discover(self, source_urls, query=None):
+        self.received_queries.append(query)
         return ResearchResult(documents=self._documents, discarded=[])
 
 
@@ -102,14 +104,18 @@ def client(tmp_path):
         published_date="2024-03-01",
     )
 
+    research_agent = FakeResearchAgent([document])
+
     app.dependency_overrides[get_session] = override_get_session
     app.dependency_overrides[get_memory_store] = lambda: ProjectMemoryStore(memory_dir=tmp_path)
-    app.dependency_overrides[get_research_agent] = lambda: FakeResearchAgent([document])
+    app.dependency_overrides[get_research_agent] = lambda: research_agent
     app.dependency_overrides[get_case_curation] = lambda: FakeCaseCuration()
     app.dependency_overrides[get_story_writing_use_case] = lambda: FakeStoryWritingUseCase()
     app.dependency_overrides[get_platform_adaptation_use_case] = lambda: FakePlatformAdaptationUseCase()
 
-    yield TestClient(app)
+    test_client = TestClient(app)
+    test_client.research_agent = research_agent
+    yield test_client
     app.dependency_overrides.clear()
 
 
@@ -128,3 +134,26 @@ def test_run_research_requires_at_least_one_source_url(client):
     response = client.post("/research/run", json={"source_urls": []})
 
     assert response.status_code == 422
+
+
+def test_run_research_forwards_query_to_the_research_agent(client):
+    response = client.post(
+        "/research/run",
+        json={
+            "source_urls": ["https://www.aaro.mil/reports/2024.pdf"],
+            "query": "missile silo incidents",
+        },
+    )
+
+    assert response.status_code == 200
+    assert client.research_agent.received_queries == ["missile silo incidents"]
+
+
+def test_omitting_query_from_the_request_body_forwards_none(client):
+    response = client.post(
+        "/research/run",
+        json={"source_urls": ["https://www.aaro.mil/reports/2024.pdf"]},
+    )
+
+    assert response.status_code == 200
+    assert client.research_agent.received_queries == [None]

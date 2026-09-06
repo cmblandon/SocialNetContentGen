@@ -96,3 +96,23 @@ def test_fetch_returns_none_when_summary_is_missing_or_empty():
     adapter = FirecrawlScraperAdapter(api_key="test-key", client=client)
 
     assert adapter.fetch("https://theblackvault.com/documentarchive/some-case/") is None
+
+
+def test_fetch_with_a_query_includes_it_as_the_extraction_prompt():
+    client = FakeHttpClient(_success_response())
+    adapter = FirecrawlScraperAdapter(api_key="test-key", client=client)
+
+    adapter.fetch("https://theblackvault.com/documentarchive/some-case/", query="missile silos")
+
+    assert client.last_json["urls"] == ["https://theblackvault.com/documentarchive/some-case/"]
+    assert client.last_json["prompt"] == "missile silos"
+
+
+def test_fetch_without_a_query_sends_no_prompt_field():
+    client = FakeHttpClient(_success_response())
+    adapter = FirecrawlScraperAdapter(api_key="test-key", client=client)
+
+    adapter.fetch("https://theblackvault.com/documentarchive/some-case/")
+
+    assert client.last_json == {"urls": ["https://theblackvault.com/documentarchive/some-case/"]}
+    assert "prompt" not in client.last_json

@@ -309,10 +309,18 @@ python3 -m alembic upgrade head
 - `POST /research/run` — the manual trigger for a research+curation pass
   (design.md defers autonomous daily/cron scheduling as a Non-Goal; call
   this yourself when you want a new cycle, or use the admin panel's
-  "Ejecutar pipeline" button). Body: `{"source_urls": [...]}` (at least one
-  required). Runs discover → curate → write → adapt → persist for every URL
-  that clears the allowlist, dedup, and curation threshold, and returns the
-  same summary shape as `run_cycle`.
+  "Ejecutar pipeline" button). Body: `{"source_urls": [...], "query": "..."}`
+  (`source_urls` requires at least one entry; `query` is optional — a
+  topic/focus string, e.g. `"Malmstrom missile incidents"`). Runs discover →
+  curate → write → adapt → persist for every URL that clears the allowlist,
+  dedup, and curation threshold, and returns the same summary shape as
+  `run_cycle`. When `query` is given, extraction is scoped to that topic
+  where the configured scraper supports it — see
+  `research-query-scoping`'s design.md Decisions 1-2: `FirecrawlScraperAdapter`
+  uses it to guide extraction (Firecrawl's `/v1/extract` `prompt` field) and
+  is tried before `JinaScraperAdapter` in that case, since Jina's reader has
+  no query mode and always returns the full page. Omitting `query` reproduces
+  the exact pre-existing behavior.
 - `GET /research/sources` / `POST /research/sources` (body `{"url": ...}`) /
   `POST /research/sources/delete` (body `{"url": ...}`) — list, add, and
   remove the operator-configured source-URL list the admin panel's

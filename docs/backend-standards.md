@@ -79,9 +79,13 @@ from typing import Optional, Protocol, runtime_checkable
 
 @runtime_checkable
 class ISourceScraper(Protocol):
-    def fetch(self, source_url: str) -> Optional["ScrapedDocument"]:
+    def fetch(self, source_url: str, query: Optional[str] = None) -> Optional["ScrapedDocument"]:
         ...
 ```
+
+(`query` — added by `research-query-scoping` — is an optional topic/focus
+hint an implementation MAY use to guide extraction; not every adapter
+supports it, e.g. `JinaScraperAdapter`'s plain reader ignores it.)
 
 Mark a port `@runtime_checkable` only when a test needs `isinstance()`
 conformance checking (see `tests/unit/test_editorial_ports.py`); it isn't

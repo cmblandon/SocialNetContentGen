@@ -8,6 +8,20 @@ enforces the official-source allowlist, dedups against
 /casos_cubiertos.md before ever fetching, and falls back from the primary
 scraper to the fallback scraper on failure. Never interprets or rewrites
 what a scraper extracted.
+
+research-query-scoping (design.md Decision 2): discover() accepts an
+optional `query`. When one is given and a fallback_scraper is configured,
+discover() tries the fallback scraper BEFORE the primary for that call,
+because this codebase's only wiring (see get_research_agent() in
+presentation/routers/research.py) assumes fallback_scraper is the
+query-capable adapter (FirecrawlScraperAdapter) and primary_scraper is not
+(JinaScraperAdapter, which accepts but ignores query). This class never
+inspects which concrete adapter it was given — the inversion is a plain
+boolean decision ("was a query given, and is there a fallback"), not a
+capability check. If ResearchAgentUseCase is ever wired with a different
+pair of scrapers (e.g. primary/fallback swapped, or a third adapter with
+different query support), this ordering heuristic must be revisited — see
+design.md's Risks section.
 """
 from dataclasses import dataclass, field
 from typing import Optional
@@ -54,9 +68,20 @@ class ResearchAgentUseCase:
         self._fallback_scraper = fallback_scraper
         self._memory_store = memory_store
 
-    def discover(self, source_urls: list[str]) -> ResearchResult:
+    def discover(self, source_urls: list[str], query: Optional[str] = None) -> ResearchResult:
         result = ResearchResult()
         already_covered = self._memory_store.read_casos_cubiertos()
+
+        # research-query-scoping (design.md Decision 2): when a query is given
+        # and a fallback scraper is configured, try the fallback first — in
+        # this codebase's only wiring the fallback slot holds the
+        # query-capable adapter (Firecrawl). With no query, or no fallback
+        # configured, the order is unchanged from before this change
+        # (primary, then fallback).
+        if query and self._fallback_scraper is not None:
+            first_scraper, second_scraper = self._fallback_scraper, self._primary_scraper
+        else:
+            first_scraper, second_scraper = self._primary_scraper, self._fallback_scraper
 
         for source_url in source_urls:
             if not _is_allowed_source(source_url):
@@ -68,9 +93,9 @@ class ResearchAgentUseCase:
             if source_url in already_covered:
                 continue
 
-            document = self._primary_scraper.fetch(source_url)
-            if document is None and self._fallback_scraper is not None:
-                document = self._fallback_scraper.fetch(source_url)
+            document = first_scraper.fetch(source_url, query=query)
+            if document is None and second_scraper is not None:
+                document = second_scraper.fetch(source_url, query=query)
 
             if document is None:
                 result.discarded.append(
