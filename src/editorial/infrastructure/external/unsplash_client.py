@@ -23,6 +23,7 @@ class UnsplashImageClient:
         access_key: Optional[str] = None,
         cache_dir: Optional[Path] = None,
         base_url: str = "https://api.unsplash.com",
+        transport: Optional[httpx.BaseTransport] = None,
     ):
         """
         Initialize Unsplash client.
@@ -36,6 +37,9 @@ class UnsplashImageClient:
         self.base_url = base_url
         self.cache_dir = cache_dir or Path("data/unsplash_cache")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        # A held client reuses connections and, in tests, lets a mock
+        # transport drive the real request path rather than patching httpx.
+        self._client = httpx.Client(timeout=15.0, transport=transport)
 
     def search_image(self, query: str) -> Optional[str]:
         """
@@ -60,11 +64,10 @@ class UnsplashImageClient:
             return None
 
         try:
-            response = httpx.get(
+            response = self._client.get(
                 f"{self.base_url}/search/photos",
                 params={"query": query, "per_page": 1, "orientation": "landscape"},
                 headers={"Authorization": f"Client-ID {self.access_key}"},
-                timeout=5.0,
             )
             response.raise_for_status()
 
@@ -92,7 +95,7 @@ class UnsplashImageClient:
             StoryGenerationError: If the download fails
         """
         try:
-            response = httpx.get(url, timeout=15.0, follow_redirects=True)
+            response = self._client.get(url, follow_redirects=True)
             response.raise_for_status()
             with open(output_path, "wb") as f:
                 f.write(response.content)

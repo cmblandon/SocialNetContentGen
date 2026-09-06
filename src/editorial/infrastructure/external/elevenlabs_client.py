@@ -21,6 +21,7 @@ class ElevenLabsTextToSpeechClient:
         spanish_voice_id: Optional[str] = None,
         english_voice_id: Optional[str] = None,
         base_url: str = "https://api.elevenlabs.io/v1",
+        transport: Optional[httpx.BaseTransport] = None,
     ):
         """
         Initialize ElevenLabs client.
@@ -52,8 +53,10 @@ class ElevenLabsTextToSpeechClient:
         # Timeout is generous because synthesizing a chapter of narration is
         # not fast, but bounded: without one, httpx waits forever and a
         # hung request would strand a generation at PENDING.
+        # `transport` is how contract tests drive the real request path —
+        # URL building, headers, error handling — instead of patching post().
         self._client = httpx.Client(
-            headers={"xi-api-key": self.api_key}, timeout=120.0
+            headers={"xi-api-key": self.api_key}, timeout=120.0, transport=transport
         )
 
     def close(self) -> None:

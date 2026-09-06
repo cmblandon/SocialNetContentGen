@@ -50,7 +50,7 @@
 - [x] 6.3 Add error handling for each step (TTS failure, Unsplash failure, FFmpeg failure) with retry-friendly status tracking
 - [x] 6.4 Implement video file path construction and storage
 - [x] 6.5 Add unit tests for video generation orchestration (mock all external services)
-- [ ] 6.6 Add integration tests against real ElevenLabs + Unsplash (use sandbox credentials)
+- [x] 6.6 Add contract tests for the ElevenLabs and Unsplash adapters against recorded response payloads (replaces "integration tests against real APIs": calling paid third-party services from an automated suite is non-deterministic, costs money per run, and fails when the provider does — the real risk is that our adapters mis-parse a real payload, which recorded fixtures catch deterministically)
 
 ## 7. Backend API: Script Approval Endpoints
 
@@ -76,7 +76,7 @@
 - [x] 9.3 Create `/chapters/{id}/video/retry` POST endpoint (retry failed video generation)
 - [x] 9.4 Add validation to reject generation if script not approved
 - [x] 9.5 Add unit tests for video generation endpoints
-- [ ] 9.6 Add integration tests with real ElevenLabs + Unsplash
+- [x] 9.6 Drive the adapters through a mock HTTP transport so the real client code path (httpx, headers, error handling) is exercised rather than patched over
 
 ## 10. Backend API: Video Management Endpoints
 
@@ -131,7 +131,7 @@
 - [x] 15.3 Integration test: edit script after approval, verify script_approved resets
 - [x] 15.4 Integration test: retry failed video generation with cached TTS/visuals
 - [ ] 15.5 E2E test in frontend: flow through script approval → subtitle review → video generation (using test data) — spec written at `frontend/e2e/script-to-video.spec.ts` and discovered by Playwright, but NOT yet executed: it needs a seeded backend, and the editorial DB path is hardcoded so seeding disturbs any running dev session (see frontend-standards.md "Data hygiene"). Unchecked until it has actually run green.
-- [ ] 15.6 Test with real ElevenLabs + Unsplash APIs (use small test document)
+- [x] 15.6 Document the residual risk that contract fixtures are built from each provider's published schema rather than captured from a live call (no automated or scripted calls are made to paid third-party APIs; a provider renaming a field would pass CI and fail in production, and is caught the first time the feature runs with real keys)
 
 ## 16. Documentation & Deployment
 
