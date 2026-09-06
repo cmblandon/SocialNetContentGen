@@ -95,16 +95,16 @@
 - [x] 11.2 Add approve/reject/edit buttons to ScriptReviewCard
 - [x] 11.3 Create `ScriptApprovalView` page (list of pending scripts, search/filter, bulk actions)
 - [x] 11.4 Implement script edit modal (textarea for script text, with character count and word count feedback)
-- [ ] 11.5 Integrate `ScriptReviewCard` into Pipeline feed
+- [x] 11.5 Integrate `ScriptReviewCard` into Pipeline feed
 - [x] 11.6 Add loading/error states and toast notifications
 
 ## 12. Frontend: Subtitle Review View
 
-- [ ] 12.1 Create `SubtitleReviewCard` component (display ES + EN subtitles with timing side-by-side)
-- [ ] 12.2 Add edit modal for subtitle text (preserves timing)
-- [ ] 12.3 Integrate subtitle review into Pipeline feed (shown after script approval)
-- [ ] 12.4 Add language toggle (view ES/EN subtitles separately or side-by-side)
-- [ ] 12.5 Add unit tests for subtitle components
+- [x] 12.1 Create `SubtitleReviewCard` component (display ES + EN subtitles with timing side-by-side)
+- [x] 12.2 Add edit modal for subtitle text (preserves timing)
+- [x] 12.3 Integrate subtitle review into Pipeline feed (shown after script approval)
+- [x] 12.4 Add language toggle (view ES/EN subtitles separately or side-by-side)
+- [x] 12.5 Add unit tests for subtitle components
 
 ## 13. Frontend: Video Generation UI
 

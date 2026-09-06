@@ -1,17 +1,30 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import ScriptReviewCard from "@/components/ScriptReviewCard";
+import SubtitleReviewCard from "@/components/SubtitleReviewCard";
 import {
+  apiErrorDetail,
   approvePlatformVersion,
+  approveScript,
   fetchCheckpointSummary,
   fetchPendingChapters,
+  fetchPendingScripts,
   fetchSourceUrls,
+  fetchSubtitles,
+  generateSubtitles,
   publishPlatformVersion,
+  rejectScript,
   resumePipeline,
   runResearch,
+  updateScript,
+  updateSubtitleTrack,
   type CheckpointSummary,
   type PendingChapter,
+  type PendingScript,
   type PlatformVersionSummary,
+  type SubtitleLanguage,
+  type SubtitleTrack,
 } from "@/lib/api";
 
 const NETWORKS = [
@@ -70,12 +83,26 @@ export default function PipelineFeed() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [checkpointSummary, setCheckpointSummary] = useState<CheckpointSummary | null>(null);
+  const [scriptsById, setScriptsById] = useState<Record<string, PendingScript>>({});
+  const [subtitlesById, setSubtitlesById] = useState<Record<string, SubtitleTrack[]>>({});
+  const [subtitleErrors, setSubtitleErrors] = useState<Record<string, string>>({});
+  const [busyChapterIds, setBusyChapterIds] = useState<string[]>([]);
 
   const loadChapters = useCallback(async () => {
     try {
       setChapters(await fetchPendingChapters());
     } catch {
       setError("Failed to load the pipeline feed.");
+    }
+  }, []);
+
+  const loadScripts = useCallback(async () => {
+    try {
+      const loaded = await fetchPendingScripts();
+      setScriptsById(Object.fromEntries(loaded.map((script) => [script.id, script])));
+    } catch {
+      // The feed is still usable without the script layer; leaving it empty
+      // simply hides the review section rather than blanking the whole page.
     }
   }, []);
 
@@ -89,11 +116,12 @@ export default function PipelineFeed() {
 
   useEffect(() => {
     loadChapters();
+    loadScripts();
     loadCheckpointSummary();
     fetchSourceUrls()
       .then(setSourceUrls)
       .catch(() => setSourceUrls([]));
-  }, [loadChapters, loadCheckpointSummary]);
+  }, [loadChapters, loadScripts, loadCheckpointSummary]);
 
   const selectedApprovedChapters = useMemo(
     () => (chapters ?? []).filter((c) => selectedIds.has(c.id) && isCaseApproved(c)),
@@ -121,6 +149,125 @@ export default function PipelineFeed() {
     await resumePipeline();
     await loadChapters();
     await loadCheckpointSummary();
+  }
+
+  function markBusy(chapterId: string, busy: boolean) {
+    setBusyChapterIds((prev) =>
+      busy ? [...prev, chapterId] : prev.filter((id) => id !== chapterId),
+    );
+  }
+
+  function patchScript(chapterId: string, patch: Partial<PendingScript>) {
+    setScriptsById((prev) =>
+      prev[chapterId] ? { ...prev, [chapterId]: { ...prev[chapterId], ...patch } } : prev,
+    );
+  }
+
+  async function handleScriptApprove(chapterId: string) {
+    markBusy(chapterId, true);
+    try {
+      const result = await approveScript(chapterId);
+      patchScript(chapterId, {
+        script_approved: result.script_approved,
+        script_approved_at: result.script_approved_at,
+      });
+    } catch (caught) {
+      setError(apiErrorDetail(caught) ?? "No se pudo aprobar el guion.");
+    } finally {
+      markBusy(chapterId, false);
+    }
+  }
+
+  async function handleScriptReject(chapterId: string) {
+    markBusy(chapterId, true);
+    try {
+      const result = await rejectScript(chapterId);
+      patchScript(chapterId, {
+        script_approved: result.script_approved,
+        script_approved_at: result.script_approved_at,
+      });
+    } catch (caught) {
+      setError(apiErrorDetail(caught) ?? "No se pudo rechazar el guion.");
+    } finally {
+      markBusy(chapterId, false);
+    }
+  }
+
+  async function handleScriptSave(chapterId: string, scriptText: string) {
+    markBusy(chapterId, true);
+    try {
+      const result = await updateScript(chapterId, scriptText);
+      const trimmed = scriptText.trim();
+      patchScript(chapterId, {
+        script: scriptText,
+        word_count: trimmed ? trimmed.split(/\s+/).length : 0,
+        script_approved: result.script_approved,
+        script_approved_at: result.script_approved_at,
+      });
+    } catch (caught) {
+      setError(apiErrorDetail(caught) ?? "No se pudo guardar el guion.");
+    } finally {
+      markBusy(chapterId, false);
+    }
+  }
+
+  async function loadSubtitles(chapterId: string) {
+    // Lazy: fetching every chapter's subtitles on page load would be one
+    // request per chapter for a section most of them never open.
+    if (subtitlesById[chapterId]) return;
+    try {
+      const loaded = await fetchSubtitles(chapterId);
+      setSubtitlesById((prev) => ({ ...prev, [chapterId]: loaded }));
+    } catch (caught) {
+      setSubtitleErrors((prev) => ({
+        ...prev,
+        [chapterId]: apiErrorDetail(caught) ?? "No se pudieron cargar los subtítulos.",
+      }));
+    }
+  }
+
+  async function handleSubtitleGenerate(chapterId: string) {
+    markBusy(chapterId, true);
+    setSubtitleErrors((prev) => {
+      const next = { ...prev };
+      delete next[chapterId];
+      return next;
+    });
+    try {
+      const generated = await generateSubtitles(chapterId);
+      setSubtitlesById((prev) => ({ ...prev, [chapterId]: generated }));
+    } catch (caught) {
+      setSubtitleErrors((prev) => ({
+        ...prev,
+        [chapterId]: apiErrorDetail(caught) ?? "No se pudieron generar los subtítulos.",
+      }));
+    } finally {
+      markBusy(chapterId, false);
+    }
+  }
+
+  async function handleSubtitleSave(
+    chapterId: string,
+    lang: SubtitleLanguage,
+    segments: { index: number; text: string }[],
+  ) {
+    markBusy(chapterId, true);
+    try {
+      const updated = await updateSubtitleTrack(chapterId, lang, segments);
+      setSubtitlesById((prev) => ({
+        ...prev,
+        [chapterId]: (prev[chapterId] ?? []).map((track) =>
+          track.lang === lang ? updated : track,
+        ),
+      }));
+    } catch (caught) {
+      setSubtitleErrors((prev) => ({
+        ...prev,
+        [chapterId]: apiErrorDetail(caught) ?? "No se pudieron guardar los subtítulos.",
+      }));
+    } finally {
+      markBusy(chapterId, false);
+    }
   }
 
   function togglePreview(chapterId: string) {
@@ -260,6 +407,8 @@ export default function PipelineFeed() {
           const tiktokVersion = chapter.platform_versions.find((pv) => pv.platform === "tiktok");
           const hashtags = tiktokVersion ? parseHashtags(tiktokVersion.content) : [];
           const previewOpen = expandedIds.has(chapter.id);
+          const script = scriptsById[chapter.id];
+          const chapterBusy = busyChapterIds.includes(chapter.id);
 
           return (
             <article className="case-card" key={chapter.id}>
@@ -300,7 +449,13 @@ export default function PipelineFeed() {
                   />
                   <span>Seleccionar</span>
                 </label>
-                <button className="btn btn-preview" onClick={() => togglePreview(chapter.id)}>
+                <button
+                  className="btn btn-preview"
+                  onClick={() => {
+                    if (!previewOpen) loadSubtitles(chapter.id);
+                    togglePreview(chapter.id);
+                  }}
+                >
                   {previewOpen ? "Ocultar guion" : "Vista previa"}
                 </button>
                 {approved ? (
@@ -313,17 +468,43 @@ export default function PipelineFeed() {
               </div>
 
               {previewOpen && (
-                <div className="preview open">
-                  <h4>Guion — {chapter.title}</h4>
-                  <p className="preview-script">{chapter.script}</p>
-                  <div>
-                    {hashtags.map((tag) => (
-                      <span className="preview-tag" key={tag}>
-                        {tag}
-                      </span>
-                    ))}
+                <>
+                  <div className="preview open">
+                    <h4>Guion — {chapter.title}</h4>
+                    <p className="preview-script">{chapter.script}</p>
+                    <div>
+                      {hashtags.map((tag) => (
+                        <span className="preview-tag" key={tag}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
+
+                  {script && (
+                    <ScriptReviewCard
+                      script={script}
+                      busy={chapterBusy}
+                      onApprove={handleScriptApprove}
+                      onReject={handleScriptReject}
+                      onSave={handleScriptSave}
+                    />
+                  )}
+
+                  {/* Subtitles only make sense once the narration text is
+                      settled; the endpoint refuses with 409 otherwise. */}
+                  {script?.script_approved && (
+                    <SubtitleReviewCard
+                      chapterId={chapter.id}
+                      scriptApproved
+                      tracks={subtitlesById[chapter.id] ?? null}
+                      busy={chapterBusy}
+                      error={subtitleErrors[chapter.id] ?? null}
+                      onGenerate={handleSubtitleGenerate}
+                      onSave={handleSubtitleSave}
+                    />
+                  )}
+                </>
               )}
 
               <div className="net-status-row">
