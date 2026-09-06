@@ -96,6 +96,33 @@ The outcome of one publish/schedule attempt for a PlatformVersion.
 - `error_message` — set on failure
 - `created_at`
 
+### DiscoveredDocument
+A checkpoint of one document the research agent successfully scraped,
+recorded **before** curation is ever attempted (`research-pipeline-checkpointing`
+change) — decouples "found via scraping" from "evaluated by curation" as
+two independently-resumable steps, so a curation failure (e.g. an LLM
+billing error) never loses already-scraped content. Not foreign-keyed to
+`Document` until curation actually advances the case.
+
+- `id` (PK, string UUID)
+- `title`, `agency`, `doc_type`, `extracted_text` — required (mirrors the
+  scraped document's fields)
+- `published_date`, `source_url`, `extraction_confidence` — optional
+- `status` — enum: `pending` (scraped, not yet curated), `advanced`
+  (curation succeeded, `document_id` set), `discarded` (curation ran and
+  scored below threshold — a final outcome), `failed` (curation raised —
+  retryable via `POST /research/resume`)
+- `error_message` — set when `status = failed`, the exception's message;
+  **retained even after a later successful retry** — an audit-trail record
+  of the original failure, not cleared on recovery
+- `narrative_angle` — set when curation advances the case
+- `document_id` — optional FK → `documents.id`, set once `status = advanced`
+- `created_at`, `updated_at`
+
+**Relationships:** none cascading — a `DiscoveredDocument` row is never
+deleted; it is a permanent checkpoint/audit record, updated in place as its
+`status` progresses.
+
 ## Entity Relationship Diagram (editorial schema)
 
 ```mermaid
@@ -149,17 +176,37 @@ erDiagram
         datetime created_at
     }
 
+    DiscoveredDocument {
+        string id PK
+        string title
+        string agency
+        string doc_type
+        string published_date
+        string source_url
+        string extracted_text
+        string extraction_confidence
+        string status
+        string error_message
+        string narrative_angle
+        string document_id FK
+        datetime created_at
+        datetime updated_at
+    }
+
     Document ||--o{ Story : "generates"
     Story ||--o{ Chapter : "splits into"
     Chapter ||--o{ PlatformVersion : "adapted as"
     PlatformVersion ||--o{ PublishRecord : "publish attempts"
+    DiscoveredDocument |o--o| Document : "advances into (once curated)"
 ```
 
 ## Status
 
-All five editorial tables exist (Phase 1) and are covered by
-`tests/unit/test_editorial_models.py` and `tests/unit/test_editorial_migrations.py`.
-The full chain is live end to end:
+All six editorial tables exist and are covered by
+`tests/unit/test_editorial_models.py` and `tests/unit/test_editorial_migrations.py`
+(`discovered_documents` added by the `research-pipeline-checkpointing`
+change, migration `0002_discovered_documents`). The full chain is live end
+to end:
 
 - `orchestrator.run_research_cycle` (Phases 3-4) persists a
   `Document`/`Story`/`Chapter`/`PlatformVersion` chain via
@@ -171,3 +218,10 @@ The full chain is live end to end:
   `GET /chapters/pending` (pending items with full context),
   `GET /publish-records` (the calendar view), and `GET`/`PATCH /cases`
   (which reads/edits `casos_cubiertos.md`, not this SQL schema).
+- `orchestrator.run_research_cycle` (`research-pipeline-checkpointing`)
+  writes a `DiscoveredDocument` row immediately after a document is
+  scraped, before curation runs; `run_resume_cycle` re-processes every
+  `pending`/`failed` row without re-scraping. The admin panel reads
+  `GET /research/checkpoints/summary` to show the Pipeline feed's
+  "documentos pendientes/fallidos" banner and triggers
+  `POST /research/resume` from its "Reanudar pipeline" button.

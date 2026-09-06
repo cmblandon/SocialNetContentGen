@@ -15,13 +15,17 @@ from sqlalchemy.orm import Session
 
 from src.config.settings import settings
 from src.editorial.application.case_curation_use_case import CaseCurationUseCase
-from src.editorial.application.orchestrator import run_research_cycle
+from src.editorial.application.orchestrator import run_research_cycle, run_resume_cycle
 from src.editorial.application.platform_adaptation_use_case import (
     PlatformAdaptationUseCase,
 )
 from src.editorial.application.research_agent_use_case import ResearchAgentUseCase
 from src.editorial.application.story_writing_use_case import StoryWritingUseCase
 from src.editorial.infrastructure.llm.anthropic_llm_client import AnthropicLLMClient
+from src.editorial.infrastructure.persistence.discovered_documents_repo import (
+    count_checkpoints_by_status,
+)
+from src.editorial.infrastructure.persistence.models import CurationStatus
 from src.editorial.infrastructure.persistence.project_memory import ProjectMemoryStore
 from src.editorial.infrastructure.persistence.session import get_session
 from src.editorial.infrastructure.scraping.firecrawl_scraper import (
@@ -44,6 +48,11 @@ class ResearchRunResponse(BaseModel):
     chapters_generated: int
     pending_approval_platform_version_ids: list[str]
     discarded_document_ids: list[str]
+
+
+class CheckpointSummaryResponse(BaseModel):
+    pending: int
+    failed: int
 
 
 class SourceUrlsResponse(BaseModel):
@@ -121,6 +130,40 @@ def run_research(
         chapters_generated=summary.chapters_generated,
         pending_approval_platform_version_ids=summary.pending_approval_platform_version_ids,
         discarded_document_ids=summary.discarded_document_ids,
+    )
+
+
+@router.post("/resume", response_model=ResearchRunResponse)
+def resume_research(
+    session: Session = Depends(get_session),
+    memory_store: ProjectMemoryStore = Depends(get_memory_store),
+    case_curation: CaseCurationUseCase = Depends(get_case_curation),
+    story_writing_use_case: StoryWritingUseCase = Depends(get_story_writing_use_case),
+    platform_adaptation_use_case: PlatformAdaptationUseCase = Depends(
+        get_platform_adaptation_use_case
+    ),
+) -> ResearchRunResponse:
+    summary = run_resume_cycle(
+        session=session,
+        case_curation=case_curation,
+        story_writing_use_case=story_writing_use_case,
+        platform_adaptation_use_case=platform_adaptation_use_case,
+        memory_store=memory_store,
+    )
+    return ResearchRunResponse(
+        documents_reviewed=summary.documents_reviewed,
+        stories_created=summary.stories_created,
+        chapters_generated=summary.chapters_generated,
+        pending_approval_platform_version_ids=summary.pending_approval_platform_version_ids,
+        discarded_document_ids=summary.discarded_document_ids,
+    )
+
+
+@router.get("/checkpoints/summary", response_model=CheckpointSummaryResponse)
+def get_checkpoints_summary(session: Session = Depends(get_session)) -> CheckpointSummaryResponse:
+    return CheckpointSummaryResponse(
+        pending=count_checkpoints_by_status(session, CurationStatus.PENDING),
+        failed=count_checkpoints_by_status(session, CurationStatus.FAILED),
     )
 
 

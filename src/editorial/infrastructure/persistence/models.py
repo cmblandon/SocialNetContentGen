@@ -161,3 +161,58 @@ class PublishRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     platform_version: Mapped["PlatformVersion"] = relationship(back_populates="publish_records")
+
+
+class CurationStatus(str, enum.Enum):
+    """
+    Lifecycle of a DiscoveredDocument checkpoint (research-pipeline-
+    checkpointing design.md Decision 1). PENDING until curation is
+    attempted; ADVANCED/DISCARDED are terminal outcomes of a curation call
+    that actually ran; FAILED means curation itself errored (LLM/network
+    error, malformed response) — distinct from DISCARDED (curation ran to
+    completion and scored below threshold) because a FAILED row is
+    retryable via POST /research/resume and a DISCARDED one is not.
+    """
+
+    PENDING = "pending"
+    ADVANCED = "advanced"
+    DISCARDED = "discarded"
+    FAILED = "failed"
+
+
+class DiscoveredDocument(Base):
+    """
+    A document research-agent successfully scraped, checkpointed
+    immediately — before curation is ever attempted — so a curation-stage
+    failure can never silently lose already-scraped content (design.md
+    Decision 1). Deliberately a separate table from Document: Document
+    continues to mean "an editorial case with a story" everywhere else in
+    this codebase (its `stories` relationship, the admin panel's cases
+    view, manual_curation_cli), not "anything ever scraped, including
+    permanently discarded/failed ones".
+
+    Rows are never deleted (design.md Decision 5): once ADVANCED or
+    DISCARDED they stay as a permanent audit trail; FAILED rows stay
+    FAILED until a resume attempt changes their status.
+    """
+
+    __tablename__ = "discovered_documents"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    agency: Mapped[str] = mapped_column(String(200), nullable=False)
+    doc_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    published_date: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    source_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    extracted_text: Mapped[str] = mapped_column(Text, nullable=False)
+    extraction_confidence: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    status: Mapped[CurationStatus] = mapped_column(
+        SAEnum(CurationStatus), nullable=False, default=CurationStatus.PENDING
+    )
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    narrative_angle: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    document_id: Mapped[Optional[str]] = mapped_column(ForeignKey("documents.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )

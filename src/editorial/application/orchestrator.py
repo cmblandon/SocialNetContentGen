@@ -23,7 +23,15 @@ from src.editorial.application.platform_adaptation_use_case import (
 )
 from src.editorial.application.research_agent_use_case import ResearchAgentUseCase
 from src.editorial.application.story_writing_use_case import StoryWritingUseCase
-from src.editorial.infrastructure.persistence.models import Document
+from src.editorial.core.ports import ScrapedDocument
+from src.editorial.infrastructure.persistence.discovered_documents_repo import (
+    create_pending_checkpoint,
+    find_checkpoints_by_status,
+    mark_checkpoint_advanced,
+    mark_checkpoint_discarded,
+    mark_checkpoint_failed,
+)
+from src.editorial.infrastructure.persistence.models import CurationStatus, DiscoveredDocument, Document
 from src.editorial.infrastructure.persistence.project_memory import ProjectMemoryStore
 
 MIN_EXTRACTED_TEXT_WORDS = 20
@@ -56,6 +64,18 @@ class CycleSummary:
     chapters_generated: int = 0
     pending_approval_platform_version_ids: list[str] = field(default_factory=list)
     discarded_document_ids: list[str] = field(default_factory=list)
+
+    def merge(self, other: "CycleSummary") -> "CycleSummary":
+        """Accumulates another CycleSummary into this one in place — used
+        when run_cycle is invoked once per advancing document (design.md
+        Decision 2) instead of once per batch, so the caller-visible total
+        is still a single CycleSummary."""
+        self.documents_reviewed += other.documents_reviewed
+        self.stories_created += other.stories_created
+        self.chapters_generated += other.chapters_generated
+        self.pending_approval_platform_version_ids.extend(other.pending_approval_platform_version_ids)
+        self.discarded_document_ids.extend(other.discarded_document_ids)
+        return self
 
 
 def run_cycle(
@@ -112,6 +132,73 @@ def run_cycle(
     return summary
 
 
+def _process_checkpointed_document(
+    session: Session,
+    scraped_document: ScrapedDocument,
+    checkpoint: DiscoveredDocument,
+    case_curation: CaseCurationUseCase,
+    story_writing_use_case: StoryWritingUseCase,
+    platform_adaptation_use_case: PlatformAdaptationUseCase,
+    memory_store: ProjectMemoryStore,
+) -> CycleSummary:
+    """
+    Curates one already-checkpointed document and, if it advances, writes/
+    adapts/persists it IMMEDIATELY via a single-element run_cycle call —
+    research-pipeline-checkpointing design.md Decision 2. Shared by
+    run_research_cycle (fresh discovery) and run_resume_cycle (reprocessing
+    PENDING/FAILED checkpoints with no scraping involved), so the two entry
+    points can't drift apart.
+
+    Any exception from case_curation.curate() (LLM error, network failure,
+    a deliberately-raised CurationError for malformed output, etc.) is
+    caught here and isolates this one document — it does not propagate to
+    the caller, and does not stop the remaining documents in the same
+    batch from being processed.
+    """
+    try:
+        curation_result = case_curation.curate(scraped_document)
+    except Exception as error:  # noqa: BLE001 - intentionally broad: ANY
+        # curation-stage failure must be isolated per document, not just
+        # the specific exception types CaseCurationUseCase happens to
+        # raise today (an unguarded LLM client call can raise anything,
+        # e.g. anthropic.BadRequestError).
+        mark_checkpoint_failed(session, checkpoint, str(error))
+        return CycleSummary()
+
+    if curation_result is None or not curation_result.advanced:
+        # None: already evaluated previously (casos_cubiertos.md dedup,
+        # done inside curate() before it ever calls the LLM) — treated the
+        # same as an explicit discard: a final, non-retryable outcome.
+        mark_checkpoint_discarded(session, checkpoint)
+        return CycleSummary()
+
+    document = Document(
+        title=scraped_document.title,
+        agency=scraped_document.agency,
+        doc_type=scraped_document.doc_type,
+        published_date=scraped_document.published_date,
+        source_url=scraped_document.source_url,
+        extracted_text=scraped_document.extracted_text,
+        extraction_confidence=scraped_document.extraction_confidence,
+    )
+    session.add(document)
+    session.commit()
+
+    summary = run_cycle(
+        session=session,
+        documents_with_angles=[(document, curation_result.narrative_angle)],
+        story_writing_use_case=story_writing_use_case,
+        platform_adaptation_use_case=platform_adaptation_use_case,
+        memory_store=memory_store,
+    )
+
+    mark_checkpoint_advanced(
+        session, checkpoint, document_id=document.id, narrative_angle=curation_result.narrative_angle
+    )
+
+    return summary
+
+
 def run_research_cycle(
     session: Session,
     source_urls: list[str],
@@ -123,41 +210,90 @@ def run_research_cycle(
     query: Optional[str] = None,
 ) -> CycleSummary:
     """
-    Real input path (Phase 4), replacing the Phase 2 manual-curation CLI
-    fixture: discover -> curate -> (only advanced documents) write/adapt/
-    persist via run_cycle. A document that curation discards or has
-    already evaluated never reaches story-writing.
+    Real input path (Phase 4): discover -> checkpoint -> curate -> (only
+    advanced documents) write/adapt/persist, via the shared per-document
+    helper (research-pipeline-checkpointing design.md Decision 2/3). Every
+    document discover() returns is checkpointed as PENDING before curation
+    is ever attempted, so a curation-stage failure never loses it — and one
+    document's curation failure doesn't stop the rest of the batch (see
+    _process_checkpointed_document). Source URLs already checkpointed as
+    PENDING/FAILED from a previous run are skipped before discover() is
+    even called, so a retried call with the same URLs doesn't re-scrape
+    them (design.md Decision 4).
 
     research-query-scoping: `query` is forwarded unchanged to
     research_agent.discover() — this function has no opinion on what a
     query does or how scraper order is decided, that's entirely
     ResearchAgentUseCase's concern (see its module docstring).
     """
-    research_result = research_agent.discover(source_urls, query=query)
-
-    documents_with_angles: list[tuple[Document, str]] = []
-    for scraped_document in research_result.documents:
-        curation_result = case_curation.curate(scraped_document)
-        if curation_result is None or not curation_result.advanced:
-            continue
-
-        document = Document(
-            title=scraped_document.title,
-            agency=scraped_document.agency,
-            doc_type=scraped_document.doc_type,
-            published_date=scraped_document.published_date,
-            source_url=scraped_document.source_url,
-            extracted_text=scraped_document.extracted_text,
-            extraction_confidence=scraped_document.extraction_confidence,
-        )
-        session.add(document)
-        session.commit()
-        documents_with_angles.append((document, curation_result.narrative_angle))
-
-    return run_cycle(
-        session=session,
-        documents_with_angles=documents_with_angles,
-        story_writing_use_case=story_writing_use_case,
-        platform_adaptation_use_case=platform_adaptation_use_case,
-        memory_store=memory_store,
+    non_terminal_checkpoints = find_checkpoints_by_status(
+        session, [CurationStatus.PENDING, CurationStatus.FAILED]
     )
+    already_checkpointed_urls = {
+        checkpoint.source_url for checkpoint in non_terminal_checkpoints if checkpoint.source_url
+    }
+    urls_to_discover = [url for url in source_urls if url not in already_checkpointed_urls]
+
+    research_result = research_agent.discover(urls_to_discover, query=query)
+
+    summary = CycleSummary()
+    for scraped_document in research_result.documents:
+        checkpoint = create_pending_checkpoint(session, scraped_document)
+        summary.merge(
+            _process_checkpointed_document(
+                session=session,
+                scraped_document=scraped_document,
+                checkpoint=checkpoint,
+                case_curation=case_curation,
+                story_writing_use_case=story_writing_use_case,
+                platform_adaptation_use_case=platform_adaptation_use_case,
+                memory_store=memory_store,
+            )
+        )
+
+    return summary
+
+
+def run_resume_cycle(
+    session: Session,
+    case_curation: CaseCurationUseCase,
+    story_writing_use_case: StoryWritingUseCase,
+    platform_adaptation_use_case: PlatformAdaptationUseCase,
+    memory_store: ProjectMemoryStore,
+) -> CycleSummary:
+    """
+    Reprocesses every checkpointed document still in a retryable state
+    (PENDING or FAILED) through curation -> writing -> adaptation, with NO
+    scraping involved at all — this is what lets an operator recover after
+    fixing whatever broke (e.g. topping up LLM credit) without re-spending
+    scraper calls (design.md Decision 3). Reuses the exact same
+    per-document helper run_research_cycle uses, so the two entry points
+    can't drift apart. Returns a zeroed CycleSummary, not an error, when
+    nothing is pending/failed.
+    """
+    summary = CycleSummary()
+    checkpoints = find_checkpoints_by_status(session, [CurationStatus.PENDING, CurationStatus.FAILED])
+
+    for checkpoint in checkpoints:
+        scraped_document = ScrapedDocument(
+            title=checkpoint.title,
+            agency=checkpoint.agency,
+            doc_type=checkpoint.doc_type,
+            extracted_text=checkpoint.extracted_text,
+            published_date=checkpoint.published_date,
+            source_url=checkpoint.source_url,
+            extraction_confidence=checkpoint.extraction_confidence,
+        )
+        summary.merge(
+            _process_checkpointed_document(
+                session=session,
+                scraped_document=scraped_document,
+                checkpoint=checkpoint,
+                case_curation=case_curation,
+                story_writing_use_case=story_writing_use_case,
+                platform_adaptation_use_case=platform_adaptation_use_case,
+                memory_store=memory_store,
+            )
+        )
+
+    return summary

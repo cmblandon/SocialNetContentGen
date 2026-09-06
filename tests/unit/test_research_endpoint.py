@@ -30,7 +30,7 @@ from src.editorial.core.entities import (
     XAdaptation,
 )
 from src.editorial.core.ports import ScrapedDocument
-from src.editorial.infrastructure.persistence.models import Base
+from src.editorial.infrastructure.persistence.models import Base, CurationStatus, DiscoveredDocument
 from src.editorial.infrastructure.persistence.project_memory import ProjectMemoryStore
 from src.editorial.infrastructure.persistence.session import get_session
 from src.editorial.presentation.app import app
@@ -115,6 +115,7 @@ def client(tmp_path):
 
     test_client = TestClient(app)
     test_client.research_agent = research_agent
+    test_client.session_factory = TestSessionLocal
     yield test_client
     app.dependency_overrides.clear()
 
@@ -157,3 +158,65 @@ def test_omitting_query_from_the_request_body_forwards_none(client):
 
     assert response.status_code == 200
     assert client.research_agent.received_queries == [None]
+
+
+def test_resume_research_processes_pending_checkpoints_and_returns_summary(client):
+    session = client.session_factory()
+    session.add(DiscoveredDocument(
+        title="Old Scraped Doc",
+        agency="AARO",
+        doc_type="report",
+        extracted_text=" ".join(["word"] * 50),
+        published_date="2024-01-01",
+        source_url="https://www.aaro.mil/reports/old.pdf",
+        status=CurationStatus.PENDING,
+    ))
+    session.commit()
+    session.close()
+
+    response = client.post("/research/resume")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["documents_reviewed"] == 1
+    assert body["stories_created"] == 1
+    assert body["chapters_generated"] == 1
+
+
+def test_resume_research_with_nothing_pending_or_failed_returns_a_zeroed_summary(client):
+    response = client.post("/research/resume")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body == {
+        "documents_reviewed": 0,
+        "stories_created": 0,
+        "chapters_generated": 0,
+        "pending_approval_platform_version_ids": [],
+        "discarded_document_ids": [],
+    }
+
+
+def test_checkpoints_summary_returns_zero_counts_when_none_exist(client):
+    response = client.get("/research/checkpoints/summary")
+
+    assert response.status_code == 200
+    assert response.json() == {"pending": 0, "failed": 0}
+
+
+def test_checkpoints_summary_counts_pending_and_failed_rows_only(client):
+    session = client.session_factory()
+    session.add_all([
+        DiscoveredDocument(title="P1", agency="AARO", doc_type="report", extracted_text="t", status=CurationStatus.PENDING),
+        DiscoveredDocument(title="P2", agency="AARO", doc_type="report", extracted_text="t", status=CurationStatus.PENDING),
+        DiscoveredDocument(title="F1", agency="AARO", doc_type="report", extracted_text="t", status=CurationStatus.FAILED),
+        DiscoveredDocument(title="A1", agency="AARO", doc_type="report", extracted_text="t", status=CurationStatus.ADVANCED),
+        DiscoveredDocument(title="D1", agency="AARO", doc_type="report", extracted_text="t", status=CurationStatus.DISCARDED),
+    ])
+    session.commit()
+    session.close()
+
+    response = client.get("/research/checkpoints/summary")
+
+    assert response.status_code == 200
+    assert response.json() == {"pending": 2, "failed": 1}

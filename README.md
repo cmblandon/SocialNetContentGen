@@ -192,8 +192,9 @@ src/editorial/
 │   │   └── postiz_publisher.py          # Default ISocialPublisher (self-hosted Postiz)
 │   └── persistence/
 │       ├── models.py        # SQLAlchemy models: Document, Story, Chapter,
-│       │                    # PlatformVersion, PublishRecord
+│       │                    # PlatformVersion, PublishRecord, DiscoveredDocument
 │       ├── ficha_reader.py   # Read-only access to the ingestion pipeline's SQLite
+│       ├── discovered_documents_repo.py # DiscoveredDocument checkpoint persistence/lookup
 │       ├── project_memory.py # ProjectMemoryStore: casos_cubiertos.md, calendario.md, manual_de_marca.md
 │       ├── session.py        # SQLAlchemy session factory for editorial.sqlite
 │       └── migrations/      # Alembic environment + revisions
@@ -202,7 +203,8 @@ src/editorial/
     ├── dependencies.py       # Shared DI providers (memory store, LLM client, publisher)
     └── routers/
         ├── approval.py       # POST /platform-versions/{id}/approve|reject|publish
-        ├── research.py       # POST /research/run; GET/POST /research/sources; POST /research/sources/delete
+        ├── research.py       # POST /research/run|resume; GET /research/checkpoints/summary;
+        │                     # GET/POST /research/sources; POST /research/sources/delete
         └── publish_records.py # GET /publish-records
 ```
 
@@ -253,6 +255,37 @@ Orchestration lives in two deliberately separate places:
   details), delegates to the use cases, persists the result as
   `pending_review`, and updates `casos_cubiertos.md`. This does not need
   the LLM in the loop and must behave identically every run.
+
+### Checkpointing and resuming a research pass (`research-pipeline-checkpointing`)
+
+Every document `research_agent.discover()` returns is persisted as a
+`DiscoveredDocument` checkpoint (`status = pending`) **before** curation is
+ever attempted — decoupling "found via scraping" from "evaluated by
+curation" so a curation failure (LLM billing error, transient network
+issue, malformed response) never loses already-scraped content. Each
+document's curation is isolated in its own try/except and its
+write/adapt/persist cycle runs immediately once it advances, rather than
+batching every document in the run to a single write step at the end —
+this avoids the earlier bug where a crash on document N would silently
+strand documents 1..N-1's already-approved cases with no `Story` ever
+created for them.
+
+- A checkpoint that raises during curation becomes `status = failed`, with
+  the exception's message recorded in `error_message` — retryable, not a
+  final outcome (unlike `discarded`, which means curation *ran* and scored
+  below threshold).
+- `POST /research/resume` reprocesses every `pending`/`failed` checkpoint
+  through curation → writing → adaptation with **no scraping at all** —
+  this is what lets the operator recover after fixing whatever broke (e.g.
+  topping up API credit) without re-spending scraper calls.
+- `research_agent.discover()`'s dedup check (via `run_research_cycle`) now
+  also excludes any `source_url` with a non-terminal (`pending`/`failed`)
+  checkpoint, on top of the existing `casos_cubiertos.md` check — so
+  retrying `POST /research/run` with the same URL after a failure does not
+  re-scrape it.
+- Checkpoint rows are never deleted — they're a permanent audit trail, even
+  after a retry succeeds (the original `error_message` is retained on the
+  now-`advanced` row).
 
 ### Publishing and the publisher swap mechanism
 
@@ -320,7 +353,18 @@ python3 -m alembic upgrade head
   uses it to guide extraction (Firecrawl's `/v1/extract` `prompt` field) and
   is tried before `JinaScraperAdapter` in that case, since Jina's reader has
   no query mode and always returns the full page. Omitting `query` reproduces
-  the exact pre-existing behavior.
+  the exact pre-existing behavior. Every document scraped is checkpointed
+  before curation (`research-pipeline-checkpointing` — see above); a
+  curation failure for one document no longer aborts the rest of the batch.
+- `POST /research/resume` — reprocesses every `pending`/`failed`
+  `DiscoveredDocument` checkpoint through curation → writing → adaptation,
+  with no request body and **no re-scraping**. Same response shape as
+  `POST /research/run`. This is the admin panel's "Reanudar pipeline"
+  action.
+- `GET /research/checkpoints/summary` — `{"pending": <count>, "failed":
+  <count>}`, counting `DiscoveredDocument` rows by status. The admin panel
+  polls this to decide whether to show the checkpoint banner and resume
+  button.
 - `GET /research/sources` / `POST /research/sources` (body `{"url": ...}`) /
   `POST /research/sources/delete` (body `{"url": ...}`) — list, add, and
   remove the operator-configured source-URL list the admin panel's

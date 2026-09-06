@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   approvePlatformVersion,
+  fetchCheckpointSummary,
   fetchPendingChapters,
   fetchSourceUrls,
   publishPlatformVersion,
+  resumePipeline,
   runResearch,
+  type CheckpointSummary,
   type PendingChapter,
   type PlatformVersionSummary,
 } from "@/lib/api";
@@ -66,6 +69,7 @@ export default function PipelineFeed() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
+  const [checkpointSummary, setCheckpointSummary] = useState<CheckpointSummary | null>(null);
 
   const loadChapters = useCallback(async () => {
     try {
@@ -75,12 +79,21 @@ export default function PipelineFeed() {
     }
   }, []);
 
+  const loadCheckpointSummary = useCallback(async () => {
+    try {
+      setCheckpointSummary(await fetchCheckpointSummary());
+    } catch {
+      setCheckpointSummary({ pending: 0, failed: 0 });
+    }
+  }, []);
+
   useEffect(() => {
     loadChapters();
+    loadCheckpointSummary();
     fetchSourceUrls()
       .then(setSourceUrls)
       .catch(() => setSourceUrls([]));
-  }, [loadChapters]);
+  }, [loadChapters, loadCheckpointSummary]);
 
   const selectedApprovedChapters = useMemo(
     () => (chapters ?? []).filter((c) => selectedIds.has(c.id) && isCaseApproved(c)),
@@ -102,6 +115,12 @@ export default function PipelineFeed() {
     } catch {
       setRunStatus("error");
     }
+  }
+
+  async function handleResumePipeline() {
+    await resumePipeline();
+    await loadChapters();
+    await loadCheckpointSummary();
   }
 
   function togglePreview(chapterId: string) {
@@ -196,6 +215,18 @@ export default function PipelineFeed() {
           </button>
         </div>
       </div>
+
+      {checkpointSummary && (checkpointSummary.pending > 0 || checkpointSummary.failed > 0) && (
+        <div className="checkpoint-banner" data-testid="checkpoint-banner">
+          <span className="checkpoint-banner-text">
+            {checkpointSummary.pending} documento(s) pendiente(s) de curación
+            {checkpointSummary.failed > 0 && `, ${checkpointSummary.failed} fallido(s)`}
+          </span>
+          <button className="btn-resume" onClick={handleResumePipeline}>
+            Reanudar pipeline
+          </button>
+        </div>
+      )}
 
       <div className="bulk-bar" data-testid="bulk-bar">
         <span className={`bulk-count${selectedApprovedChapters.length > 0 ? " active" : ""}`}>

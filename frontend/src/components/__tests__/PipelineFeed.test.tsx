@@ -53,6 +53,7 @@ const approvedChapter: api.PendingChapter = {
 beforeEach(() => {
   jest.resetAllMocks();
   mockedApi.fetchSourceUrls.mockResolvedValue(["https://www.aaro.mil/reports/2024.pdf"]);
+  mockedApi.fetchCheckpointSummary.mockResolvedValue({ pending: 0, failed: 0 });
 });
 
 test("shows the document header, hook, pending stamp, and metadata", async () => {
@@ -259,4 +260,50 @@ test("running the pipeline with a whitespace-only topic omits the query argument
   await user.click(screen.getByRole("button", { name: /ejecutar pipeline/i }));
 
   expect(mockedApi.runResearch).toHaveBeenCalledWith(["https://www.aaro.mil/reports/2024.pdf"]);
+});
+
+test("shows no checkpoint banner or resume button when nothing is pending or failed", async () => {
+  mockedApi.fetchPendingChapters.mockResolvedValue([]);
+  // fetchCheckpointSummary defaults to { pending: 0, failed: 0 } via beforeEach
+
+  render(<PipelineFeed />);
+
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: /ejecutar pipeline/i })).toBeInTheDocument()
+  );
+  expect(screen.queryByTestId("checkpoint-banner")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /reanudar pipeline/i })).not.toBeInTheDocument();
+});
+
+test("shows a checkpoint banner with pending/failed counts and a resume button when checkpoints are outstanding", async () => {
+  mockedApi.fetchPendingChapters.mockResolvedValue([]);
+  mockedApi.fetchCheckpointSummary.mockResolvedValue({ pending: 2, failed: 1 });
+
+  render(<PipelineFeed />);
+
+  const banner = await screen.findByTestId("checkpoint-banner");
+  expect(banner.textContent).toContain("2");
+  expect(banner.textContent).toContain("1");
+  expect(screen.getByRole("button", { name: /reanudar pipeline/i })).toBeInTheDocument();
+});
+
+test("clicking the resume button calls resumePipeline and reloads the pipeline feed", async () => {
+  mockedApi.fetchPendingChapters.mockResolvedValue([]);
+  mockedApi.fetchCheckpointSummary.mockResolvedValue({ pending: 2, failed: 1 });
+  mockedApi.resumePipeline.mockResolvedValue({
+    documents_reviewed: 2,
+    stories_created: 1,
+    chapters_generated: 1,
+    pending_approval_platform_version_ids: [],
+    discarded_document_ids: [],
+  });
+  const user = userEvent.setup();
+
+  render(<PipelineFeed />);
+  await screen.findByTestId("checkpoint-banner");
+
+  await user.click(screen.getByRole("button", { name: /reanudar pipeline/i }));
+
+  await waitFor(() => expect(mockedApi.resumePipeline).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(mockedApi.fetchPendingChapters.mock.calls.length).toBeGreaterThanOrEqual(2));
 });

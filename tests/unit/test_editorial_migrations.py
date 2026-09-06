@@ -8,7 +8,10 @@ from sqlalchemy import create_engine, inspect
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = PROJECT_ROOT / "alembic.ini"
 
-EXPECTED_TABLES = {"documents", "stories", "chapters", "platform_versions", "publish_records"}
+EXPECTED_TABLES = {
+    "documents", "stories", "chapters", "platform_versions", "publish_records",
+    "discovered_documents",
+}
 
 
 @pytest.fixture

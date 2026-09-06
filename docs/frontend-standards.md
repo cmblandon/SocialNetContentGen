@@ -169,6 +169,15 @@ version reaches a terminal state):
   sent as `query` in the `POST /research/run` body only when non-empty
   (trimmed client-side in both `PipelineFeed.tsx` and `runResearch()`
   itself); leaving it blank reproduces the exact pre-existing behavior.
+- A checkpoint banner (`research-pipeline-checkpointing`) polls
+  `GET /research/checkpoints/summary` on mount and renders between the
+  topbar and the bulk-action bar whenever `pending > 0 || failed > 0`,
+  showing both counts plus a "Reanudar pipeline" button
+  (`data-testid="checkpoint-banner"`). Clicking it calls
+  `POST /research/resume` (no request body — reprocesses every
+  checkpointed document without re-scraping), then reloads both the
+  chapter feed and the checkpoint summary so the banner disappears once
+  nothing is left outstanding. Renders nothing when both counts are zero.
 
 ## Configuración
 
@@ -197,6 +206,18 @@ pipeline" targets. Mounted at `/settings`.
   `data/knowledge_base/editorial_memory/` before seeding to avoid stale
   duplicate data breaking Playwright's strict-mode element matching (this
   happened once during Phase 6 development).
+- **Gotcha (check for a live dev server first)**: the DB path and memory
+  directory are hardcoded (`session.py`, `dependencies.py`, `alembic.ini`),
+  not environment-variable driven, so resetting/moving
+  `data/knowledge_base/` for an E2E pass affects *every* process pointed at
+  it — including a developer's own already-running `uvicorn --reload` /
+  `next dev` session on the standard ports (8000/3000). Check
+  `lsof -i :8000 -i :3000` before touching that directory; if either port
+  is already bound, run the isolated-backend pattern instead (a separate
+  `uvicorn.run()` process on a scratch port with `app.dependency_overrides`
+  pointed at a scratch DB/memory dir, as used for curl verification in
+  `research-pipeline-checkpointing`'s step 4.3 report) rather than resetting
+  the shared path (`research-pipeline-checkpointing`'s step 6.3 report).
 - **CORS**: the backend must allow `http://localhost:3000` (see
   `docs/backend-standards.md`) or every E2E/manual browser test against a
   real server will fail outright.
