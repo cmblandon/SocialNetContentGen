@@ -83,6 +83,11 @@ The system SHALL support querying and deleting video files (for storage manageme
 - **WHEN** `GET /videos/stats` is called
 - **THEN** return total storage used, count of videos by status, and largest videos
 
+#### Scenario: Remaining disk space is reported
+- **WHEN** `GET /videos/stats` is called
+- **THEN** also return the free and total capacity of the filesystem holding `data/videos_generated/`, so the admin panel can warn before generation fails for lack of space (design.md names storage growth as a risk whose mitigation is warning on disk space)
+- **AND** if capacity cannot be determined, the fields SHALL be `null` rather than `0`, so "unknown" is not rendered as "full"
+
 ### Requirement: Video File Retrieval
 The system SHALL serve a generated video's bytes over HTTP, so the admin panel can preview and download it. The stored `video_file_path` is a server-side filesystem path and is not reachable by a browser on its own.
 

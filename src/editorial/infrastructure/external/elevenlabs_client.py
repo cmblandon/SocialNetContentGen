@@ -49,7 +49,22 @@ class ElevenLabsTextToSpeechClient:
             )
 
         self.base_url = base_url
-        self._client = httpx.Client(headers={"xi-api-key": self.api_key})
+        # Timeout is generous because synthesizing a chapter of narration is
+        # not fast, but bounded: without one, httpx waits forever and a
+        # hung request would strand a generation at PENDING.
+        self._client = httpx.Client(
+            headers={"xi-api-key": self.api_key}, timeout=120.0
+        )
+
+    def close(self) -> None:
+        """Release the HTTP connection pool."""
+        self._client.close()
+
+    def __enter__(self) -> "ElevenLabsTextToSpeechClient":
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self.close()
 
     def generate_speech(self, text: str, language: str, output_path: str) -> int:
         """
@@ -116,6 +131,13 @@ class ElevenLabsTextToSpeechClient:
             raise StoryGenerationError(f"Unsupported language: {language}")
 
     def __del__(self):
-        """Close HTTP client on cleanup."""
-        if hasattr(self, "_client"):
-            self._client.close()
+        # Backstop only. __del__ runs at GC's discretion and can fire during
+        # interpreter shutdown when httpx's internals are already torn down,
+        # so close()/the context manager are the real release path; this just
+        # avoids leaking a pool when a caller forgets both.
+        client = getattr(self, "_client", None)
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                pass

@@ -13,6 +13,7 @@ required to report. The file goes; the row stays and is filtered from
 listings.
 """
 import os
+import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -94,6 +95,10 @@ class VideoStorageStats:
     count_by_status: dict[str, int]
     largest_videos: list[LargestVideoItem]
     missing_on_disk: int
+    # None, never 0, when capacity cannot be determined — rendering "unknown"
+    # as "full" would raise a false alarm, and as "empty" would hide a real one.
+    disk_free_mb: Optional[float] = None
+    disk_total_mb: Optional[float] = None
 
 
 @dataclass
@@ -210,8 +215,31 @@ def resolve_playable_video_path(
     return path
 
 
+def disk_capacity_mb(path: Path) -> tuple[Optional[float], Optional[float]]:
+    """
+    Free and total capacity of the filesystem holding `path`, in MB.
+
+    Walks up to the nearest existing ancestor, since the video directory may
+    not exist yet on a fresh install. Returns (None, None) when capacity
+    cannot be read at all.
+    """
+    probe = Path(path).resolve()
+    while not probe.exists() and probe != probe.parent:
+        probe = probe.parent
+
+    try:
+        usage = shutil.disk_usage(probe)
+    except OSError:
+        return None, None
+
+    megabyte = 1024 * 1024
+    return round(usage.free / megabyte, 1), round(usage.total / megabyte, 1)
+
+
 def get_storage_stats(
-    session: Session, largest_limit: int = DEFAULT_LARGEST_LIMIT
+    session: Session,
+    largest_limit: int = DEFAULT_LARGEST_LIMIT,
+    video_root: Optional[Path] = None,
 ) -> VideoStorageStats:
     """
     Storage usage across non-deleted records.
@@ -261,12 +289,17 @@ def get_storage_stats(
         )
 
     sized.sort(key=lambda item: item.size_mb, reverse=True)
+    disk_free_mb, disk_total_mb = (
+        disk_capacity_mb(video_root) if video_root is not None else (None, None)
+    )
 
     return VideoStorageStats(
         total_storage_mb=round(total_mb, 3),
         count_by_status=count_by_status,
         largest_videos=sized[:largest_limit],
         missing_on_disk=missing_on_disk,
+        disk_free_mb=disk_free_mb,
+        disk_total_mb=disk_total_mb,
     )
 
 

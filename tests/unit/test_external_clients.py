@@ -54,6 +54,31 @@ class TestElevenLabsTextToSpeechClient:
         assert client.spanish_voice_id == "es-id"
         assert client.english_voice_id == "en-id"
 
+    def test_close_releases_the_connection_pool(self):
+        client = ElevenLabsTextToSpeechClient(
+            api_key="key", spanish_voice_id="es", english_voice_id="en"
+        )
+        assert client._client.is_closed is False
+
+        client.close()
+
+        assert client._client.is_closed is True
+
+    def test_works_as_a_context_manager(self):
+        with ElevenLabsTextToSpeechClient(
+            api_key="key", spanish_voice_id="es", english_voice_id="en"
+        ) as client:
+            inner = client._client
+            assert inner.is_closed is False
+        assert inner.is_closed is True
+
+    def test_request_timeout_is_bounded(self):
+        """Without a timeout a hung TTS call strands a generation at PENDING."""
+        client = ElevenLabsTextToSpeechClient(
+            api_key="key", spanish_voice_id="es", english_voice_id="en"
+        )
+        assert client._client.timeout.read is not None
+
     def test_get_audio_duration_measures_the_file(self):
         """Duration comes from ffprobe, not from a text-length estimate."""
         client = ElevenLabsTextToSpeechClient(

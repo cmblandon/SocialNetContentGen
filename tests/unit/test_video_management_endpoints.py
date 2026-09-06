@@ -593,3 +593,34 @@ def test_audit_is_empty_for_a_chapter_with_no_attempts(client, test_engine):
 
 def test_audit_unknown_chapter_returns_404(client):
     assert client.get("/chapters/no-such-id/audit").status_code == 404
+
+
+# --- disk capacity (10.8) ---------------------------------------------------
+
+
+def test_stats_reports_disk_capacity(client):
+    stats = client.get("/videos/stats").json()
+
+    assert stats["disk_free_mb"] is not None
+    assert stats["disk_total_mb"] is not None
+    assert 0 < stats["disk_free_mb"] <= stats["disk_total_mb"]
+
+
+def test_disk_capacity_walks_up_to_an_existing_ancestor(tmp_path):
+    """A fresh install has no video directory yet; capacity is still knowable."""
+    from src.editorial.application.video_management import disk_capacity_mb
+
+    free, total = disk_capacity_mb(tmp_path / "does" / "not" / "exist" / "yet")
+
+    assert free is not None and total is not None
+    assert free <= total
+
+
+def test_disk_capacity_is_null_when_unreadable(tmp_path):
+    """None, never 0 — 'unknown' must not render as 'full'."""
+    from unittest.mock import patch
+
+    from src.editorial.application.video_management import disk_capacity_mb
+
+    with patch("shutil.disk_usage", side_effect=OSError("nope")):
+        assert disk_capacity_mb(tmp_path) == (None, None)

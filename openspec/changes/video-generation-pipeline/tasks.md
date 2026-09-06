@@ -87,6 +87,7 @@
 - [x] 10.5 Add unit tests for video management endpoints
 - [x] 10.6 Create `/videos/{id}/file` GET endpoint streaming the MP4 with Range support (the admin panel cannot play a server-side filesystem path; required by 13.3 and 13.5)
 - [x] 10.7 Add unit tests for video file retrieval, including path confinement to `data/videos_generated/`
+- [x] 10.8 Report free/total disk capacity in `/videos/stats` (design.md names storage growth as a risk mitigated by warning on disk space; required by 14.3)
 
 ## 11. Frontend: Script Approval View
 
@@ -116,7 +117,7 @@
 
 ## 14. Frontend: Video Management Views
 
-- [ ] 14.1 Add "Videos" page/tab listing all generated videos with metadata (size, duration, platform, language, generated date)
+- [ ] 14.1 Add "Videos" page/tab listing all generated videos with metadata (size, platform, language, generated date). Duration deferred: it needs a `duration_seconds` column and migration, and chapter length is already constrained to 150–220 words (~60–90s), so it is largely implied
 - [ ] 14.2 Add filters: by platform, language, status, date range
 - [ ] 14.3 Add storage usage indicator (total used, remaining disk space warning)
 - [ ] 14.4 Add delete button for individual videos

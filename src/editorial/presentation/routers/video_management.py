@@ -73,6 +73,8 @@ class VideoStatsResponse(BaseModel):
     count_by_status: dict[str, int]
     largest_videos: list[LargestVideoResponse]
     missing_on_disk: int
+    disk_free_mb: Optional[float]
+    disk_total_mb: Optional[float]
 
 
 class AuditEntryResponse(BaseModel):
@@ -108,13 +110,18 @@ def video_stats(
         default=DEFAULT_LARGEST_LIMIT, ge=1, le=MAX_LARGEST_LIMIT
     ),
     session: Session = Depends(get_session),
+    video_root: Path = Depends(get_video_root),
 ) -> VideoStatsResponse:
-    stats = get_storage_stats(session, largest_limit=largest_limit)
+    stats = get_storage_stats(
+        session, largest_limit=largest_limit, video_root=video_root
+    )
     return VideoStatsResponse(
         total_storage_mb=stats.total_storage_mb,
         count_by_status=stats.count_by_status,
         largest_videos=[LargestVideoResponse(**vars(v)) for v in stats.largest_videos],
         missing_on_disk=stats.missing_on_disk,
+        disk_free_mb=stats.disk_free_mb,
+        disk_total_mb=stats.disk_total_mb,
     )
 
 

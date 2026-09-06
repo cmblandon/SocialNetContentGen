@@ -4,6 +4,7 @@ out so multiple routers (research, approval) don't each redefine
 get_memory_store/get_llm_client.
 """
 from pathlib import Path
+from typing import Iterator
 
 from fastapi import Depends
 
@@ -59,12 +60,21 @@ def get_subtitle_store() -> SubtitleStore:
     return SubtitleStore(subtitle_root=SUBTITLE_ROOT, audio_root=AUDIO_ROOT)
 
 
-def get_text_to_speech_client() -> ElevenLabsTextToSpeechClient:
-    return ElevenLabsTextToSpeechClient(
+def get_text_to_speech_client() -> Iterator[ElevenLabsTextToSpeechClient]:
+    """
+    Yielded rather than returned so the connection pool is closed when the
+    request ends. Returning it left every request's pool alive until garbage
+    collection happened to run.
+    """
+    client = ElevenLabsTextToSpeechClient(
         api_key=settings.elevenlabs_api_key,
         spanish_voice_id=settings.elevenlabs_spanish_voice_id,
         english_voice_id=settings.elevenlabs_english_voice_id,
     )
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 def get_subtitle_generation_use_case(
