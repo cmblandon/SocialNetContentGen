@@ -106,6 +106,7 @@ def get_video_generation_use_case(
         get_subtitle_generation_use_case
     ),
     subtitle_store: SubtitleStore = Depends(get_subtitle_store),
+    video_root: Path = Depends(get_video_root),
 ) -> VideoGenerationUseCase:
     return VideoGenerationUseCase(
         tts_client=tts_client,
@@ -113,7 +114,10 @@ def get_video_generation_use_case(
         compositor=compositor,
         subtitle_use_case=subtitle_use_case,
         subtitle_store=subtitle_store,
-        video_root=VIDEO_ROOT,
+        # Injected, not the module constant: generation and the file-serving
+        # endpoint must resolve the same directory, or the server would serve
+        # from somewhere generation never wrote.
+        video_root=video_root,
     )
 
 

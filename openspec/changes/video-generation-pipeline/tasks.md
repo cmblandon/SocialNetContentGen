@@ -126,11 +126,11 @@
 
 ## 15. Integration & End-to-End Testing
 
-- [ ] 15.1 Test full workflow: document → story → script approval → subtitle generation → video generation
-- [ ] 15.2 Integration test: approve script, then attempt video generation (verify it succeeds)
-- [ ] 15.3 Integration test: edit script after approval, verify script_approved resets
-- [ ] 15.4 Integration test: retry failed video generation with cached TTS/visuals
-- [ ] 15.5 E2E test in frontend: flow through script approval → subtitle review → video generation (using test data)
+- [x] 15.1 Test full workflow: document → story → script approval → subtitle generation → video generation
+- [x] 15.2 Integration test: approve script, then attempt video generation (verify it succeeds)
+- [x] 15.3 Integration test: edit script after approval, verify script_approved resets
+- [x] 15.4 Integration test: retry failed video generation with cached TTS/visuals
+- [ ] 15.5 E2E test in frontend: flow through script approval → subtitle review → video generation (using test data) — spec written at `frontend/e2e/script-to-video.spec.ts` and discovered by Playwright, but NOT yet executed: it needs a seeded backend, and the editorial DB path is hardcoded so seeding disturbs any running dev session (see frontend-standards.md "Data hygiene"). Unchecked until it has actually run green.
 - [ ] 15.6 Test with real ElevenLabs + Unsplash APIs (use small test document)
 
 ## 16. Documentation & Deployment
