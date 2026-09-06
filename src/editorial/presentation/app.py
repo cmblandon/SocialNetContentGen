@@ -18,6 +18,9 @@ from src.editorial.presentation.routers.publish_records import (
     router as publish_records_router,
 )
 from src.editorial.presentation.routers.research import router as research_router
+from src.editorial.presentation.routers.script_approval import (
+    router as script_approval_router,
+)
 
 app = FastAPI(title="Archivo Desclasificado — Editorial Service")
 
@@ -37,6 +40,7 @@ app.include_router(research_router)
 app.include_router(publish_records_router)
 app.include_router(pending_chapters_router)
 app.include_router(cases_router)
+app.include_router(script_approval_router)
 
 
 @app.get("/health")

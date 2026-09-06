@@ -52,12 +52,12 @@
 
 ## 7. Backend API: Script Approval Endpoints
 
-- [ ] 7.1 Create `/chapters/{id}/script/approve` POST endpoint (set `script_approved = true`)
-- [ ] 7.2 Create `/chapters/{id}/script/reject` POST endpoint (set `script_approved = false`)
-- [ ] 7.3 Create `/chapters/{id}/script/update` POST endpoint (update script text, reset `script_approved`)
-- [ ] 7.4 Create `/chapters/pending/scripts` GET endpoint (list all chapters with pending/approved scripts)
-- [ ] 7.5 Add request/response validation and error handling
-- [ ] 7.6 Add unit tests for script approval endpoints
+- [x] 7.1 Create `/chapters/{id}/script/approve` POST endpoint (set `script_approved = true`)
+- [x] 7.2 Create `/chapters/{id}/script/reject` POST endpoint (set `script_approved = false`)
+- [x] 7.3 Create `/chapters/{id}/script/update` POST endpoint (update script text, reset `script_approved`)
+- [x] 7.4 Create `/chapters/pending/scripts` GET endpoint (list all chapters with pending/approved scripts)
+- [x] 7.5 Add request/response validation and error handling
+- [x] 7.6 Add unit tests for script approval endpoints
 
 ## 8. Backend API: Subtitle Endpoints
 
