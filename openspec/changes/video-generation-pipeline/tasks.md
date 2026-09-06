@@ -13,7 +13,7 @@
 - [x] 2.1 Update `StoryWritingUseCase` prompt template to request reel-optimized chapters (150–220 words, visual directives, pacing cues)
 - [x] 2.2 Modify `_build_chapter()` to extract and validate visual directives from LLM response
 - [x] 2.3 Add test coverage for visual directive parsing (verify directives are present in generated chapters)
-- [ ] 2.4 Test modified story generation end-to-end to confirm 150–220 word constraint is enforced
+- [x] 2.4 Contract-test story generation against a recorded Anthropic Messages API response, confirming the 150–220 word constraint is enforced on realistic LLM output (replaces "end-to-end": calling a live LLM from the automated suite is non-deterministic and costs money per run, the same objection that reshaped 6.6/9.6/15.6)
 
 ## 3. Backend Core: Subtitle Generation
 
