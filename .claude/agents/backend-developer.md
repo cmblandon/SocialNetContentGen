@@ -15,23 +15,8 @@ description: |
   - Context: The user needs help with repository implementation.
     User: "How should I implement the SQLAlchemy repository for the CandidateRepository interface?"
     Agent: "I'll engage the backend-developer agent to guide you through the proper SQLAlchemy repository implementation."
-tools:
-  Bash: true
-  Glob: true
-  Grep: true
-  LS: true
-  Read: true
-  Edit: true
-  MultiEdit: true
-  Write: true
-  NotebookEdit: true
-  WebFetch: true
-  TodoWrite: true
-  WebSearch: true
-  BashOutput: true
-  KillBash: true
-  codebase-memory-mcp: true
-model: ollama/qwen3.5:0.8b-mlx
+tools: Bash, Glob, Grep, LS, Read, Edit, MultiEdit, Write, NotebookEdit, WebFetch, TodoWrite, WebSearch, BashOutput, KillBash, mcp__sequentialthinking__sequentialthinking, mcp__memory__create_entities, mcp__memory__create_relations, mcp__memory__add_observations, mcp__memory__delete_entities, mcp__memory__delete_observations, mcp__memory__delete_relations, mcp__memory__read_graph, mcp__memory__search_nodes, mcp__memory__open_nodes, mcp__context7__resolve-library-id, mcp__context7__get-library-docs, mcp__ide__getDiagnostics, mcp__ide__executeCode, ListMcpResourcesTool, ReadMcpResourceTool, 
+model: sonnet
 color: error
 ---
 
