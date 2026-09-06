@@ -43,6 +43,14 @@ class ResearchRunResponse(BaseModel):
     discarded_document_ids: list[str]
 
 
+class SourceUrlsResponse(BaseModel):
+    source_urls: list[str]
+
+
+class SourceUrlRequest(BaseModel):
+    url: str
+
+
 def get_research_agent(
     memory_store: ProjectMemoryStore = Depends(get_memory_store),
 ) -> ResearchAgentUseCase:
@@ -102,3 +110,28 @@ def run_research(
         pending_approval_platform_version_ids=summary.pending_approval_platform_version_ids,
         discarded_document_ids=summary.discarded_document_ids,
     )
+
+
+@router.get("/sources", response_model=SourceUrlsResponse)
+def list_sources(
+    memory_store: ProjectMemoryStore = Depends(get_memory_store),
+) -> SourceUrlsResponse:
+    return SourceUrlsResponse(source_urls=memory_store.read_source_urls())
+
+
+@router.post("/sources", response_model=SourceUrlsResponse)
+def add_source(
+    request: SourceUrlRequest,
+    memory_store: ProjectMemoryStore = Depends(get_memory_store),
+) -> SourceUrlsResponse:
+    memory_store.add_source_url(request.url)
+    return SourceUrlsResponse(source_urls=memory_store.read_source_urls())
+
+
+@router.post("/sources/delete", response_model=SourceUrlsResponse)
+def remove_source(
+    request: SourceUrlRequest,
+    memory_store: ProjectMemoryStore = Depends(get_memory_store),
+) -> SourceUrlsResponse:
+    memory_store.remove_source_url(request.url)
+    return SourceUrlsResponse(source_urls=memory_store.read_source_urls())

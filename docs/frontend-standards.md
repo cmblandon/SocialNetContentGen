@@ -6,21 +6,33 @@ alwaysApply: true
 
 # Frontend Project Standards (Editorial Admin Panel)
 
-## Status: implemented (Phase 6)
+## Status: implemented (Phase 6; visual system and Pipeline feed redesigned by `enhance-admin-panel-ui`)
 
-`frontend/` exists: Next.js 16 (App Router) + TypeScript, three views
-(Approval Queue, Editorial Calendar, Covered Cases), a shared-token auth
+`frontend/` exists: Next.js 16 (App Router) + TypeScript, four views
+(Pipeline, Calendario, Casos cubiertos, Configuración), a shared-token auth
 gate, Jest + React Testing Library unit tests, and a Playwright E2E suite.
 See the root `README.md`'s "Editorial Admin Panel" section for how to run
 it locally against the backend.
 
 ## Overview
 
-The panel is an internal, single-operator tool with three views: the
-human-approval queue (its primary purpose — see design.md, this is the most
-important screen given the mandatory approval gate), the editorial calendar,
-and covered-cases management. It talks to the editorial FastAPI service
-(`src/editorial/presentation/app.py`) over REST via `src/lib/api.ts`.
+The panel is an internal, single-operator tool with four views, all behind
+a persistent sidebar shell: the **Pipeline** feed (its primary purpose,
+mounted at `/` — one case-per-card with document header, expandable
+script/hashtags preview, case-level approve, per-network publish actions,
+bulk multi-select publish, and the "Ejecutar pipeline" trigger), the
+**Calendario**, **Casos cubiertos**, and **Configuración** (the
+operator-managed source-URL list `/research/run` targets). It talks to the
+editorial FastAPI service (`src/editorial/presentation/app.py`) over REST
+via `src/lib/api.ts`.
+
+Visual identity (`enhance-admin-panel-ui` design.md Decision 4): a dark
+"declassified case file" theme ported near-verbatim from
+`frontend/mockup-panel-archivo-desclasificado.html`'s CSS into
+`src/app/globals.css` — ink background, paper-styled document headers, a
+rubber-stamp pending/approved indicator. No design-system/component-library
+adoption (no Tailwind, no MUI) — plain hand-written CSS classes, matching
+this project's existing "no unnecessary dependency" posture.
 
 ## Technology Stack
 
@@ -55,16 +67,19 @@ and covered-cases management. It talks to the editorial FastAPI service
 frontend/
 ├── src/
 │   ├── app/
-│   │   ├── page.tsx          # Home: links to the three views
-│   │   ├── login/page.tsx    # Token entry form
+│   │   ├── page.tsx          # Pipeline feed (default/landing route)
+│   │   ├── login/page.tsx    # Token entry form (unwrapped by AppShell)
 │   │   ├── api/login/route.ts # Validates the token, sets the session cookie
-│   │   ├── approvals/page.tsx
 │   │   ├── calendar/page.tsx
-│   │   └── cases/page.tsx
+│   │   ├── cases/page.tsx
+│   │   ├── settings/page.tsx # Configuración (source-URL manager)
+│   │   └── globals.css       # Visual system (see Overview above)
 │   ├── components/
-│   │   ├── ApprovalQueue.tsx  # + __tests__/ApprovalQueue.test.tsx
-│   │   ├── Calendar.tsx       # + __tests__/Calendar.test.tsx
-│   │   └── CasesView.tsx      # + __tests__/CasesView.test.tsx
+│   │   ├── AppShell.tsx        # Sidebar nav shell; excludes /login. + no test (thin wrapper)
+│   │   ├── PipelineFeed.tsx    # + __tests__/PipelineFeed.test.tsx
+│   │   ├── SourceUrlManager.tsx # + __tests__/SourceUrlManager.test.tsx
+│   │   ├── Calendar.tsx        # + __tests__/Calendar.test.tsx
+│   │   └── CasesView.tsx       # + __tests__/CasesView.test.tsx
 │   ├── lib/
 │   │   └── api.ts             # fetch wrapper + shared types for every endpoint
 │   └── proxy.ts               # Auth gate (Next.js 16 "proxy", not "middleware")
@@ -77,6 +92,10 @@ frontend/
 ├── package.json
 └── tsconfig.json
 ```
+
+The old `ApprovalQueue.tsx` (and its `/approvals` route) was removed by
+`enhance-admin-panel-ui` — `PipelineFeed.tsx` replaces it at `/`, the new
+default/landing route.
 
 ## Auth Gate
 
@@ -98,35 +117,74 @@ Next.js internals, redirecting to `/login` otherwise.
 - **Components**: functional components with hooks, TypeScript throughout.
 - **Naming**: PascalCase for components, camelCase for variables/functions,
   UPPER_SNAKE_CASE for constants.
-- **Language**: all code, comments, and UI copy in English (per CLAUDE.md
-  Section 2), independent of the fact that the editorial *content* it
-  displays (scripts, hooks) may itself be in Spanish.
+- **Language**: all code, identifiers, and comments in English (per
+  CLAUDE.md Section 2). **UI copy exception** (`enhance-admin-panel-ui`
+  design.md Decision 5): visible label text may be Spanish, matching the
+  reference mockup and this panel's Spanish-speaking operator audience
+  (nav labels, button text like "Aprobar"/"Publicar en \<network\>", the
+  "Configuración" view) — this corrects the original Phase 6 version of
+  this rule, which predated the mockup and had no real UI copy to speak
+  of yet. Route *slugs* still stay English (`/settings`, not
+  `/configuracion`) per this project's code-in-English convention; only
+  the rendered label is Spanish. Test names, code comments, and variable
+  names remain English regardless of what a component's copy displays.
 - **API types**: `src/lib/api.ts`'s interfaces are hand-kept in sync with
   the FastAPI Pydantic response models (`DocumentSummary`,
   `PlatformVersionSummary`, `PendingChapter`, `PublishRecord`, `CaseEntry`,
   ...) — there is no shared codegen between the two; when a backend
   response model changes, update `api.ts` in the same change.
 
-## Approval Queue (primary view)
+## Pipeline feed (primary view)
 
 Per `specs/content-admin-panel/spec.md`, backed by `GET /chapters/pending`
-(added in Phase 6 — the Phase 3 approve/reject endpoints alone don't expose
-read context):
+(added in Phase 6, filter widened by `enhance-admin-panel-ui` design.md
+Decision 7 to include `approved` — not just `pending_review` — platform
+versions, so a case stays visible after approval until every platform
+version reaches a terminal state):
 
-- Every pending item shows the source `Document`, the `Story` summary, the
-  `Chapter` script, and **all** `PlatformVersion`s for that chapter.
-- Approving a platform version calls `POST /platform-versions/{id}/approve`,
-  which (Phase 5) triggers publishing immediately server-side — the UI
-  shows the returned `publish_outcome` (published / proposed time / failed)
-  inline, without removing the item's card; only the Approve/Reject buttons
-  for that platform version disappear once decided.
+- Every listed case shows the source `Document` (title, hook/story summary,
+  agency, doc type, date), a rubber-stamp "Pendiente"/"Aprobado" indicator,
+  the chapter title, and an expandable script + hashtags preview.
+- A case-level "Aprobar" button calls `POST /platform-versions/{id}/approve`
+  for every still-`pending_review` platform version of that chapter in one
+  click — approving no longer triggers a publish (that's now the separate
+  `POST /platform-versions/{id}/publish` action, per design.md Decision 1).
+  Once every platform version is decided, the stamp switches to "Aprobado"
+  and the case becomes eligible for bulk selection.
+- Each approved-but-not-yet-published platform version gets its own
+  "Publicar en \<network\>" button (individual publish); published ones show
+  a read-only status chip instead.
+- Bulk selection (checkbox, disabled until a case is fully approved) plus a
+  sticky bulk-action bar publish one chosen network for every selected
+  case in one operator action — implemented as N sequential
+  `publishPlatformVersion` calls client-side, not a dedicated bulk
+  endpoint (design.md Decision 2); one case's failure doesn't block the
+  others.
+- "Ejecutar pipeline" calls `GET /research/sources` then
+  `POST /research/run` with that list, showing a status pill while the run
+  is in flight; disabled with no configured source URLs (see
+  Configuración below).
+
+## Configuración
+
+Backed by `GET/POST /research/sources` and `POST /research/sources/delete`
+— `SourceUrlManager.tsx` lists, adds, and removes the URLs "Ejecutar
+pipeline" targets. Mounted at `/settings`.
 
 ## Testing Standards
 
-- **E2E scope**: the full approve → appears-in-calendar workflow
-  (`e2e/approval-to-calendar.spec.ts`) and the covered-cases search/edit
-  workflow (`e2e/covered-cases.spec.ts`), per
-  `docs/openspec-tasks-mandatory-steps.md` Step N+3.
+- **E2E scope**: the full approve → publish → appears-in-calendar workflow
+  (`e2e/approval-to-calendar.spec.ts` — two explicit steps since
+  `enhance-admin-panel-ui`: "Aprobar" then a separate "Publicar en
+  \<network\>") and the covered-cases search/edit workflow
+  (`e2e/covered-cases.spec.ts`), per
+  `docs/openspec-tasks-mandatory-steps.md` Step N+3. Both specs log in and
+  land on `/` (the Pipeline feed), not `/approvals` (removed).
+- **Gotcha**: don't `page.goto()` immediately after clicking an action that
+  fires a `fetch` (e.g. "Publicar en \<network\>") — a full navigation can
+  abort the in-flight request before the backend receives it. Wait for a
+  visible state change that only happens after the request resolves (e.g.
+  the button being replaced by a status chip) first.
 - **Data hygiene**: E2E runs need a real backend with seeded data (a
   pending chapter, an `optimal_time:<platform>=HH:MM` line in
   `calendario.md`, and a couple of `casos_cubiertos.md` entries) — reset

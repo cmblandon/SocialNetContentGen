@@ -9,7 +9,7 @@ test("searching and editing a covered case persists the change", async ({ page }
   await page.goto("/login");
   await page.getByLabel("Access token").fill(ADMIN_TOKEN);
   await page.getByRole("button", { name: "Log in" }).click();
-  await expect(page).toHaveURL(/\/approvals/);
+  await expect(page).toHaveURL("/");
 
   await page.goto("/cases");
   await expect(page.getByText("AARO Radar Report")).toBeVisible();

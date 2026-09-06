@@ -86,3 +86,63 @@ def test_write_casos_cubiertos_replaces_the_full_file_content(tmp_path):
     store.write_casos_cubiertos("entry one\nentry two\n")
 
     assert store.read_casos_cubiertos() == "entry one\nentry two\n"
+
+
+def test_reading_source_urls_before_any_entry_returns_an_empty_list(tmp_path):
+    store = ProjectMemoryStore(memory_dir=tmp_path)
+
+    assert store.read_source_urls() == []
+
+
+def test_adding_a_source_url_makes_it_readable(tmp_path):
+    store = ProjectMemoryStore(memory_dir=tmp_path)
+
+    store.add_source_url("https://www.aaro.mil/reports/2024.pdf")
+
+    assert store.read_source_urls() == ["https://www.aaro.mil/reports/2024.pdf"]
+
+
+def test_adding_multiple_source_urls_preserves_order(tmp_path):
+    store = ProjectMemoryStore(memory_dir=tmp_path)
+
+    store.add_source_url("https://example.com/a")
+    store.add_source_url("https://example.com/b")
+
+    assert store.read_source_urls() == ["https://example.com/a", "https://example.com/b"]
+
+
+def test_adding_a_duplicate_source_url_is_a_no_op(tmp_path):
+    store = ProjectMemoryStore(memory_dir=tmp_path)
+
+    store.add_source_url("https://example.com/a")
+    store.add_source_url("https://example.com/a")
+
+    assert store.read_source_urls() == ["https://example.com/a"]
+
+
+def test_removing_a_source_url_drops_the_matching_entry(tmp_path):
+    store = ProjectMemoryStore(memory_dir=tmp_path)
+    store.add_source_url("https://example.com/a")
+    store.add_source_url("https://example.com/b")
+
+    store.remove_source_url("https://example.com/a")
+
+    assert store.read_source_urls() == ["https://example.com/b"]
+
+
+def test_removing_a_url_not_in_the_list_is_a_no_op(tmp_path):
+    store = ProjectMemoryStore(memory_dir=tmp_path)
+    store.add_source_url("https://example.com/a")
+
+    store.remove_source_url("https://example.com/not-there")
+
+    assert store.read_source_urls() == ["https://example.com/a"]
+
+
+def test_source_urls_persist_to_a_real_file_on_disk(tmp_path):
+    store = ProjectMemoryStore(memory_dir=tmp_path)
+    store.add_source_url("https://example.com/a")
+
+    reopened_store = ProjectMemoryStore(memory_dir=tmp_path)
+
+    assert reopened_store.read_source_urls() == ["https://example.com/a"]

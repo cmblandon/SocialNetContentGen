@@ -12,7 +12,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from src.editorial.application.approval_gate import approve_platform_version, persist_story
+from src.editorial.application.approval_gate import (
+    approve_platform_version,
+    persist_story,
+    reject_platform_version,
+)
 from src.editorial.core.entities import (
     ChapterDraft,
     FacebookAdaptation,
@@ -106,12 +110,29 @@ def test_lists_a_chapter_with_pending_platform_versions_and_full_context(client,
     assert all(pv["status"] == "pending_review" for pv in chapter["platform_versions"])
 
 
-def test_excludes_a_chapter_once_all_its_platform_versions_are_decided(client, test_engine):
+def test_includes_a_chapter_once_all_its_platform_versions_are_approved(client, test_engine):
+    """enhance-admin-panel-ui design.md Decision 7: a chapter must stay
+    visible after full approval so the operator can still reach the
+    explicit publish action for it — 'approved' is not a terminal state."""
     _, platform_version_ids = _seed_chapter(test_engine)
     from sqlalchemy.orm import Session
     with Session(test_engine) as session:
         for pv_id in platform_version_ids:
             approve_platform_version(session, pv_id)
+
+    response = client.get("/chapters/pending")
+
+    body = response.json()
+    assert len(body) == 1
+    assert all(pv["status"] == "approved" for pv in body[0]["platform_versions"])
+
+
+def test_excludes_a_chapter_once_all_its_platform_versions_reach_a_terminal_state(client, test_engine):
+    _, platform_version_ids = _seed_chapter(test_engine)
+    from sqlalchemy.orm import Session
+    with Session(test_engine) as session:
+        for pv_id in platform_version_ids:
+            reject_platform_version(session, pv_id)
 
     response = client.get("/chapters/pending")
 

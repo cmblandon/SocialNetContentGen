@@ -20,7 +20,7 @@ export default function LoginPage() {
       setError("Invalid token.");
       return;
     }
-    router.push("/approvals");
+    router.push("/");
   }
 
   return (

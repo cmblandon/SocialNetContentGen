@@ -33,54 +33,68 @@ export default function CasesView() {
     setEditingId(null);
   }
 
-  if (error) return <p role="alert">{error}</p>;
-
   return (
-    <div>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          load(query);
-        }}
-      >
-        <label htmlFor="case-search">Search</label>
-        <input
-          id="case-search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <button type="submit">Search</button>
-      </form>
+    <>
+      <div className="topbar">
+        <div>
+          <h1>Casos cubiertos</h1>
+          <p>Busca, revisa y edita el historial de casos evaluados.</p>
+        </div>
+      </div>
 
-      {cases === null && <p>Loading covered cases…</p>}
-      {cases?.length === 0 && <p>No covered cases found.</p>}
+      <div className="view-card">
+        {error && <p role="alert">{error}</p>}
 
-      <ul>
-        {cases?.map((caseEntry) => (
-          <li key={caseEntry.id}>
-            <p>{caseEntry.date}</p>
-            <p>{caseEntry.identifier}</p>
-            <p>{caseEntry.outcome}</p>
-            {editingId === caseEntry.id ? (
-              <>
-                <label htmlFor={`reason-${caseEntry.id}`}>Reason</label>
-                <textarea
-                  id={`reason-${caseEntry.id}`}
-                  value={draftReason}
-                  onChange={(e) => setDraftReason(e.target.value)}
-                />
-                <button onClick={() => saveEdit(caseEntry.id)}>Save</button>
-                <button onClick={() => setEditingId(null)}>Cancel</button>
-              </>
-            ) : (
-              <>
-                <p>{caseEntry.reason}</p>
-                <button onClick={() => startEditing(caseEntry)}>Edit</button>
-              </>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
+        <form
+          className="search-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            load(query);
+          }}
+        >
+          <label htmlFor="case-search">Search</label>
+          <input
+            id="case-search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <button className="btn" type="submit">Search</button>
+        </form>
+
+        {!error && cases === null && <p>Loading covered cases…</p>}
+        {!error && cases?.length === 0 && <p>No covered cases found.</p>}
+
+        {!error && cases && cases.length > 0 && (
+          <ul className="source-url-list">
+            {cases.map((caseEntry) => (
+              <li className="source-url-row" key={caseEntry.id}>
+                <div>
+                  <p>{caseEntry.date}</p>
+                  <p>{caseEntry.identifier}</p>
+                  <p>{caseEntry.outcome}</p>
+                  {editingId === caseEntry.id ? (
+                    <>
+                      <label htmlFor={`reason-${caseEntry.id}`}>Reason</label>
+                      <textarea
+                        id={`reason-${caseEntry.id}`}
+                        value={draftReason}
+                        onChange={(e) => setDraftReason(e.target.value)}
+                      />
+                      <button className="btn" onClick={() => saveEdit(caseEntry.id)}>Save</button>
+                      <button className="btn" onClick={() => setEditingId(null)}>Cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <p>{caseEntry.reason}</p>
+                      <button className="btn" onClick={() => startEditing(caseEntry)}>Edit</button>
+                    </>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </>
   );
 }

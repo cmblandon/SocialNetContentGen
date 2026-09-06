@@ -201,8 +201,8 @@ src/editorial/
     ├── app.py                # FastAPI composition root (routers added per phase)
     ├── dependencies.py       # Shared DI providers (memory store, LLM client, publisher)
     └── routers/
-        ├── approval.py       # POST /platform-versions/{id}/approve|reject
-        ├── research.py       # POST /research/run
+        ├── approval.py       # POST /platform-versions/{id}/approve|reject|publish
+        ├── research.py       # POST /research/run; GET/POST /research/sources; POST /research/sources/delete
         └── publish_records.py # GET /publish-records
 ```
 
@@ -290,24 +290,44 @@ python3 -m alembic upgrade head
 
 - `GET /health` — confirms the service is up.
 - `POST /platform-versions/{id}/approve` / `POST /platform-versions/{id}/reject`
-  — the Phase 3 stand-in for the real admin panel (Phase 6). This is the
-  human-approval gate: a `PlatformVersion` starts `pending_review` and stays
-  there until one of these is called; nothing is allowed to act on it until
-  its status is `approved` (enforced by `approval_gate.run_if_approved`,
+  — the human-approval gate: a `PlatformVersion` starts `pending_review` and
+  stays there until one of these is called; nothing is allowed to act on it
+  until its status is `approved` (enforced by `approval_gate.run_if_approved`,
   not by convention). An already-decided item returns `409`; an unknown id
-  returns `404`. **Approving immediately triggers `PublishingUseCase`**
-  (Phase 5) — the response's `publish_outcome` reports whether it actually
-  published, only proposed a time, or failed (never a silent retry; see
-  the "Publishing" section above).
+  returns `404`. **Approving no longer triggers publishing** (changed by
+  `enhance-admin-panel-ui` — see below); it only records the decision.
+- `POST /platform-versions/{id}/publish` — the explicit publish action
+  (`enhance-admin-panel-ui`, replacing the old approve-triggers-publish
+  behavior): invokes `PublishingUseCase` for one `approved` platform
+  version, gated by `approval_gate.run_if_approved`. Returns the outcome
+  fields (`published`, `external_post_id`, `error_message`,
+  `proposed_time`) flat in the response body. `404` on an unknown id;
+  `409` if the platform version isn't `approved` yet. Invokable
+  individually per platform version, or looped by the frontend for a bulk
+  "publish this network for every selected approved case" action — there
+  is no dedicated bulk endpoint (see design.md Decision 2).
 - `POST /research/run` — the manual trigger for a research+curation pass
   (design.md defers autonomous daily/cron scheduling as a Non-Goal; call
-  this yourself when you want a new cycle). Body: `{"source_urls": [...]}`
-  (at least one required). Runs discover → curate → write → adapt →
-  persist for every URL that clears the allowlist, dedup, and curation
-  threshold, and returns the same summary shape as `run_cycle`.
+  this yourself when you want a new cycle, or use the admin panel's
+  "Ejecutar pipeline" button). Body: `{"source_urls": [...]}` (at least one
+  required). Runs discover → curate → write → adapt → persist for every URL
+  that clears the allowlist, dedup, and curation threshold, and returns the
+  same summary shape as `run_cycle`.
+- `GET /research/sources` / `POST /research/sources` (body `{"url": ...}`) /
+  `POST /research/sources/delete` (body `{"url": ...}`) — list, add, and
+  remove the operator-configured source-URL list the admin panel's
+  Configuración view manages and "Ejecutar pipeline" targets. Backed by a
+  new `fuentes.md` memory file (one URL per line); adding a duplicate is a
+  no-op.
 - `GET /publish-records` — lists every publish attempt (platform, status,
   external post id, scheduled/published timestamps, error message) — the
-  read model the Phase 6 admin panel's calendar view will consume.
+  read model the admin panel's calendar view consumes.
+- `GET /chapters/pending` — every chapter with at least one non-terminal
+  (`pending_review` or `approved`) platform version, with full context
+  (source document, story summary, script, all platform versions) — the
+  read model behind the admin panel's Pipeline feed. A chapter drops out
+  only once every platform version reaches a terminal state (`published`,
+  `failed`, or `rejected`).
 
 ### Running the manual story + platform-adaptation CLI
 
@@ -343,10 +363,13 @@ python3 -m alembic downgrade base  # revert it
 
 ## Editorial Admin Panel (`frontend/` — Next.js)
 
-The Phase 6 admin panel: an internal, single-operator UI for the
-human-approval queue, the editorial calendar, and covered-cases management.
-See `docs/frontend-standards.md` for the full architecture and standards;
-this section is the local-dev walkthrough.
+An internal, single-operator UI with a dark "declassified case file" visual
+identity (`enhance-admin-panel-ui`): a **Pipeline** feed (`/`, the default
+route) for reviewing/approving/publishing cases and triggering pipeline
+runs, the editorial **Calendario** (`/calendar`), **Casos cubiertos**
+(`/cases`), and **Configuración** (`/settings`) for managing the source-URL
+list. See `docs/frontend-standards.md` for the full architecture and
+standards; this section is the local-dev walkthrough.
 
 ### Running it locally against the backend
 

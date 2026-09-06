@@ -150,7 +150,10 @@ collapse these three concerns into one class.
 - **FastAPI app**: composition root at `src/editorial/presentation/app.py`;
   register new routers there as phases add them (approval endpoints in
   Phase 3, research trigger in Phase 4, publish-records in Phase 5, cases in
-  Phase 6 — see `openspec/changes/archivo-desclasificado-pipeline/tasks.md`).
+  Phase 6 — see `openspec/changes/archivo-desclasificado-pipeline/tasks.md`;
+  the explicit `/publish` endpoint and the `/research/sources` CRUD were
+  added by `enhance-admin-panel-ui` — see that change's `design.md`
+  Decisions 1 and 3).
 - **Status codes**: use FastAPI's defaults unless a spec requirement says
   otherwise (e.g. `specs/publishing/spec.md` requiring specific
   approve/reject transitions).

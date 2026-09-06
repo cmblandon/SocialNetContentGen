@@ -1,10 +1,17 @@
 """
-GET /chapters/pending — supports the content-admin-panel Approval Queue
-view (specs/content-admin-panel/spec.md): every pending item must show the
+GET /chapters/pending — supports the content-admin-panel Pipeline feed
+(specs/content-admin-panel/spec.md): every listed item must show the
 source Document, the Story summary, the Chapter script, and ALL
 PlatformVersions for that chapter, not a subset. Not itemized as its own
 task in tasks.md's Phase 6 — added because the queue view can't be built
 without a read endpoint exposing this context.
+
+Filter is "has a non-terminal platform version" (PENDING_REVIEW or
+APPROVED), not "has a PENDING_REVIEW one" — per enhance-admin-panel-ui
+design.md Decision 7: a chapter must stay visible after full approval so
+the operator can still reach the explicit publish action for it. A chapter
+drops out only once every platform version reaches a terminal state
+(PUBLISHED, FAILED, or REJECTED).
 """
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -54,7 +61,11 @@ def list_pending_chapters(session: Session = Depends(get_session)) -> list[Pendi
         session.execute(
             select(Chapter.id)
             .join(PlatformVersion)
-            .where(PlatformVersion.status == ApprovalStatus.PENDING_REVIEW)
+            .where(
+                PlatformVersion.status.in_(
+                    (ApprovalStatus.PENDING_REVIEW, ApprovalStatus.APPROVED)
+                )
+            )
             .distinct()
         )
         .scalars()
