@@ -98,15 +98,21 @@ class VideoGenerationUseCase:
         self._subtitle_store = subtitle_store or SubtitleStore()
         self._video_root = video_root or DEFAULT_VIDEO_ROOT
 
-    def generate_video(
+    def create_pending(
         self, session: Session, platform_version_id: str, language: str
-    ) -> VideoGenerationResult:
+    ) -> VideoGeneration:
         """
-        Generate a video for one platform version in one language.
+        Record an intent to generate, without doing any of the work.
+
+        Split from the pipeline so an HTTP caller can validate the request,
+        persist a PENDING row, and return its id immediately while
+        composition runs in the background (specs/video-generation-from-script:
+        "creates a VideoGeneration record with status = pending and returns
+        immediately").
 
         Raises ScriptNotApprovedError when the script is not approved, and
-        ValueError for an unknown platform version or unsupported language.
-        Every other failure is reported through the returned result.
+        ValueError for an unknown platform version or unsupported language —
+        all before any row exists, so a rejected request leaves no trace.
         """
         self._require_supported_language(language)
         platform_version = self._load_approved_platform_version(session, platform_version_id)
@@ -118,17 +124,43 @@ class VideoGenerationUseCase:
         )
         session.add(video_generation)
         session.commit()
+        return video_generation
 
+    def run_pending(self, session: Session, video_generation_id: str) -> VideoGenerationResult:
+        """
+        Run the pipeline for an already-created PENDING row.
+
+        Refuses a row that is not PENDING: re-running a GENERATED row would
+        redo paid work for a video that already exists, and re-running one
+        already in flight would have two workers writing the same files.
+        """
+        video_generation = session.get(VideoGeneration, video_generation_id)
+        if video_generation is None:
+            raise ValueError(f"VideoGeneration {video_generation_id} does not exist.")
+        if video_generation.status != VideoGenerationStatus.PENDING:
+            raise ValueError(
+                f"VideoGeneration {video_generation_id} is "
+                f"'{video_generation.status.value}', not 'pending'."
+            )
+
+        platform_version = self._load_approved_platform_version(
+            session, video_generation.platform_version_id
+        )
         return self._run_pipeline(session, video_generation, platform_version)
 
-    def retry_video_generation(
-        self, session: Session, video_generation_id: str
+    def generate_video(
+        self, session: Session, platform_version_id: str, language: str
     ) -> VideoGenerationResult:
+        """Create the record and run the pipeline synchronously."""
+        video_generation = self.create_pending(session, platform_version_id, language)
+        return self.run_pending(session, video_generation.id)
+
+    def create_retry(self, session: Session, video_generation_id: str) -> VideoGeneration:
         """
-        Retry a failed generation, reusing any audio/visual/subtitle files the
-        failed attempt left behind (spec: "Retry uses cached audio and
-        visuals"). Recorded as a new row linked to the original via
-        `retry_of_id` so the audit trail keeps both attempts.
+        Record a retry of a failed generation, without doing the work.
+
+        A new row linked to the original via `retry_of_id`, so the audit trail
+        keeps both attempts rather than overwriting the failure.
         """
         failed = session.get(VideoGeneration, video_generation_id)
         if failed is None:
@@ -151,8 +183,18 @@ class VideoGenerationUseCase:
         )
         session.add(retry)
         session.commit()
+        return retry
 
-        return self._run_pipeline(session, retry, platform_version)
+    def retry_video_generation(
+        self, session: Session, video_generation_id: str
+    ) -> VideoGenerationResult:
+        """
+        Retry a failed generation synchronously, reusing any audio/visual/
+        subtitle files the failed attempt left behind (spec: "Retry uses
+        cached audio and visuals").
+        """
+        retry = self.create_retry(session, video_generation_id)
+        return self.run_pending(session, retry.id)
 
     def _run_pipeline(
         self,

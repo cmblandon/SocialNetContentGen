@@ -22,6 +22,9 @@ from src.editorial.presentation.routers.script_approval import (
     router as script_approval_router,
 )
 from src.editorial.presentation.routers.subtitles import router as subtitles_router
+from src.editorial.presentation.routers.video_generation import (
+    router as video_generation_router,
+)
 
 app = FastAPI(title="Archivo Desclasificado — Editorial Service")
 
@@ -43,6 +46,7 @@ app.include_router(pending_chapters_router)
 app.include_router(cases_router)
 app.include_router(script_approval_router)
 app.include_router(subtitles_router)
+app.include_router(video_generation_router)
 
 
 @app.get("/health")

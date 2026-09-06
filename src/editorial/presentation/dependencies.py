@@ -11,20 +11,25 @@ from src.editorial.application.subtitle_generation_use_case import (
     SubtitleGenerationUseCase,
 )
 from src.editorial.application.subtitle_review_use_case import SubtitleReviewUseCase
+from src.editorial.application.video_generation_use_case import VideoGenerationUseCase
 from src.editorial.infrastructure.external.elevenlabs_client import (
     ElevenLabsTextToSpeechClient,
 )
+from src.editorial.infrastructure.external.unsplash_client import UnsplashImageClient
 from src.editorial.infrastructure.llm.anthropic_llm_client import AnthropicLLMClient
 from src.editorial.infrastructure.persistence.project_memory import ProjectMemoryStore
 from src.editorial.infrastructure.persistence.subtitle_store import SubtitleStore
 from src.editorial.infrastructure.publishing.postiz_publisher import (
     PostizPublisherAdapter,
 )
+from src.editorial.infrastructure.video.ffmpeg_compositor import FFmpegCompositor
 
 EDITORIAL_MEMORY_DIR = DATA_DIR / "knowledge_base" / "editorial_memory"
 SUBTITLE_ROOT = DATA_DIR / "subtitles"
 AUDIO_ROOT = DATA_DIR / "audio"
 SUBTITLE_CACHE_DIR = DATA_DIR / "knowledge_base" / "subtitle_cache"
+UNSPLASH_CACHE_DIR = DATA_DIR / "unsplash_cache"
+VIDEO_ROOT = DATA_DIR / "videos_generated"
 
 
 def get_memory_store() -> ProjectMemoryStore:
@@ -64,6 +69,35 @@ def get_subtitle_generation_use_case(
     llm_client: AnthropicLLMClient = Depends(get_llm_client),
 ) -> SubtitleGenerationUseCase:
     return SubtitleGenerationUseCase(llm_client=llm_client, cache_dir=SUBTITLE_CACHE_DIR)
+
+
+def get_image_client() -> UnsplashImageClient:
+    return UnsplashImageClient(
+        access_key=settings.unsplash_access_key, cache_dir=UNSPLASH_CACHE_DIR
+    )
+
+
+def get_video_compositor() -> FFmpegCompositor:
+    return FFmpegCompositor()
+
+
+def get_video_generation_use_case(
+    tts_client: ElevenLabsTextToSpeechClient = Depends(get_text_to_speech_client),
+    image_client: UnsplashImageClient = Depends(get_image_client),
+    compositor: FFmpegCompositor = Depends(get_video_compositor),
+    subtitle_use_case: SubtitleGenerationUseCase = Depends(
+        get_subtitle_generation_use_case
+    ),
+    subtitle_store: SubtitleStore = Depends(get_subtitle_store),
+) -> VideoGenerationUseCase:
+    return VideoGenerationUseCase(
+        tts_client=tts_client,
+        image_client=image_client,
+        compositor=compositor,
+        subtitle_use_case=subtitle_use_case,
+        subtitle_store=subtitle_store,
+        video_root=VIDEO_ROOT,
+    )
 
 
 def get_subtitle_review_use_case(

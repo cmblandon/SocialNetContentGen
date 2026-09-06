@@ -25,3 +25,16 @@ def get_session() -> Iterator[Session]:
         yield session
     finally:
         session.close()
+
+
+def get_session_factory() -> sessionmaker:
+    """
+    The sessionmaker itself, for work that outlives a request.
+
+    A background task cannot use the request-scoped session from
+    get_session(): FastAPI closes that as soon as the response is sent, so
+    the task would find it unusable partway through. Exposed as a dependency
+    rather than importing SessionLocal directly so tests can point background
+    work at the same in-memory database as the request.
+    """
+    return SessionLocal

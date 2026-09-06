@@ -69,11 +69,11 @@
 
 ## 9. Backend API: Video Generation Endpoints
 
-- [ ] 9.1 Create `/chapters/{id}/video/generate` POST endpoint (trigger video generation, return immediately with pending status)
-- [ ] 9.2 Create `/chapters/{id}/video` GET endpoint (retrieve video metadata: path, status, size, language, generated_at)
-- [ ] 9.3 Create `/chapters/{id}/video/retry` POST endpoint (retry failed video generation)
-- [ ] 9.4 Add validation to reject generation if script not approved
-- [ ] 9.5 Add unit tests for video generation endpoints
+- [x] 9.1 Create `/chapters/{id}/video/generate` POST endpoint (trigger video generation, return immediately with pending status)
+- [x] 9.2 Create `/chapters/{id}/video` GET endpoint (retrieve video metadata: path, status, size, language, generated_at)
+- [x] 9.3 Create `/chapters/{id}/video/retry` POST endpoint (retry failed video generation)
+- [x] 9.4 Add validation to reject generation if script not approved
+- [x] 9.5 Add unit tests for video generation endpoints
 - [ ] 9.6 Add integration tests with real ElevenLabs + Unsplash
 
 ## 10. Backend API: Video Management Endpoints
