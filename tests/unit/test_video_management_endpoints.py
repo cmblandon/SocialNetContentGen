@@ -624,3 +624,143 @@ def test_disk_capacity_is_null_when_unreadable(tmp_path):
 
     with patch("shutil.disk_usage", side_effect=OSError("nope")):
         assert disk_capacity_mb(tmp_path) == (None, None)
+
+
+# --- GET /videos/metrics (17.2) ---------------------------------------------
+
+
+def test_metrics_on_an_empty_library(client):
+    metrics = client.get("/videos/metrics").json()
+
+    assert metrics["total_attempts"] == 0
+    # None, not 0.0: no attempts means the rate is unknown, not a total
+    # failure.
+    assert metrics["success_rate"] is None
+    assert metrics["average_composition_seconds"] is None
+    assert metrics["failures_by_step"] == {}
+
+
+def test_metrics_reports_success_rate(client, test_engine, media_root):
+    chapter_id = _seed_chapter(test_engine)
+    video, _ = _video_paths(media_root)
+    _add_video(test_engine, chapter_id, video_path=video)
+    _add_video(
+        test_engine,
+        chapter_id,
+        platform=PlatformName.INSTAGRAM,
+        status=VideoGenerationStatus.FAILED,
+    )
+
+    metrics = client.get("/videos/metrics").json()
+
+    assert metrics["generated"] == 1
+    assert metrics["failed"] == 1
+    assert metrics["success_rate"] == 0.5
+
+
+def test_metrics_excludes_pending_from_the_success_rate(client, test_engine, media_root):
+    """A run still in flight has no outcome; counting it as failure understates health."""
+    chapter_id = _seed_chapter(test_engine)
+    video, _ = _video_paths(media_root)
+    _add_video(test_engine, chapter_id, video_path=video)
+    _add_video(
+        test_engine,
+        chapter_id,
+        platform=PlatformName.INSTAGRAM,
+        status=VideoGenerationStatus.PENDING,
+    )
+
+    metrics = client.get("/videos/metrics").json()
+
+    assert metrics["pending"] == 1
+    assert metrics["success_rate"] == 1.0
+
+
+def test_metrics_groups_failures_by_pipeline_step(client, test_engine):
+    chapter_id = _seed_chapter(test_engine)
+    with Session(test_engine) as session:
+        for platform, message in [
+            (PlatformName.TIKTOK, "tts step failed: quota exceeded"),
+            (PlatformName.INSTAGRAM, "tts step failed: network error"),
+            (PlatformName.X, "composition step failed: encoder crashed"),
+            (PlatformName.FACEBOOK, "something else entirely"),
+        ]:
+            pv = (
+                session.query(PlatformVersion)
+                .filter_by(chapter_id=chapter_id, platform=platform)
+                .one()
+            )
+            session.add(
+                VideoGeneration(
+                    platform_version_id=pv.id,
+                    language="es",
+                    status=VideoGenerationStatus.FAILED,
+                    error_message=message,
+                )
+            )
+        session.commit()
+
+    metrics = client.get("/videos/metrics").json()
+
+    assert metrics["failures_by_step"] == {"tts": 2, "composition": 1, "unknown": 1}
+
+
+def test_metrics_derives_composition_time_from_timestamps(client, test_engine, media_root):
+    """No duration column: created_at and generated_at already bound the work."""
+    chapter_id = _seed_chapter(test_engine)
+    video, _ = _video_paths(media_root)
+    video_id = _add_video(test_engine, chapter_id, video_path=video)
+
+    with Session(test_engine) as session:
+        record = session.get(VideoGeneration, video_id)
+        record.created_at = datetime(2026, 9, 6, 10, 0, 0, tzinfo=timezone.utc)
+        record.generated_at = datetime(2026, 9, 6, 10, 0, 42, tzinfo=timezone.utc)
+        session.commit()
+
+    assert client.get("/videos/metrics").json()["average_composition_seconds"] == 42.0
+
+
+def test_metrics_counts_deleted_attempts(client, test_engine, media_root):
+    """Tidying away a failure must not inflate the success rate."""
+    chapter_id = _seed_chapter(test_engine)
+    video, srt = _video_paths(media_root)
+    failed_id = _add_video(
+        test_engine, chapter_id, status=VideoGenerationStatus.FAILED
+    )
+    _add_video(
+        test_engine,
+        chapter_id,
+        platform=PlatformName.INSTAGRAM,
+        video_path=video,
+        subtitle_path=srt,
+    )
+
+    before = client.get("/videos/metrics").json()["success_rate"]
+    client.delete(f"/videos/{failed_id}")
+    after = client.get("/videos/metrics").json()["success_rate"]
+
+    assert before == 0.5
+    assert after == 0.5
+
+
+def test_metrics_counts_recent_activity_as_an_api_usage_proxy(
+    client, test_engine, media_root
+):
+    chapter_id = _seed_chapter(test_engine)
+    video, _ = _video_paths(media_root)
+    recent_id = _add_video(test_engine, chapter_id, video_path=video)
+    old_id = _add_video(
+        test_engine, chapter_id, platform=PlatformName.INSTAGRAM,
+        status=VideoGenerationStatus.FAILED,
+    )
+
+    with Session(test_engine) as session:
+        session.get(VideoGeneration, old_id).created_at = datetime(
+            2020, 1, 1, tzinfo=timezone.utc
+        )
+        session.commit()
+
+    metrics = client.get("/videos/metrics").json()
+
+    assert metrics["total_attempts"] == 2
+    assert metrics["generations_last_24h"] == 1

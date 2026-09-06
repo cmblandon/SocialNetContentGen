@@ -6,6 +6,7 @@ Implements caching to minimize API requests.
 """
 import hashlib
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Optional
@@ -13,6 +14,8 @@ from typing import Optional
 import httpx
 
 from src.editorial.core.exceptions import StoryGenerationError
+
+logger = logging.getLogger("editorial.unsplash")
 
 
 class UnsplashImageClient:
@@ -73,6 +76,7 @@ class UnsplashImageClient:
 
             results = response.json().get("results", [])
             if not results:
+                logger.info("Unsplash had no results for %r", query)
                 return None
 
             image_url = results[0]["urls"]["regular"]
@@ -81,6 +85,7 @@ class UnsplashImageClient:
 
         except httpx.HTTPError as error:
             # API error: return None to trigger fallback
+            logger.warning("Unsplash query %r failed: %s", query, error)
             return None
 
     def download_image(self, url: str, output_path: str) -> None:

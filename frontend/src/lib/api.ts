@@ -355,6 +355,19 @@ export interface VideoStats {
   disk_total_mb: number | null;
 }
 
+export interface VideoMetrics {
+  total_attempts: number;
+  generated: number;
+  failed: number;
+  pending: number;
+  /** Null when nothing has an outcome yet — not 0, which would read as total failure. */
+  success_rate: number | null;
+  average_composition_seconds: number | null;
+  failures_by_step: Record<string, number>;
+  /** A proxy for third-party API usage, not a quota reading. */
+  generations_last_24h: number;
+}
+
 export interface DeleteVideoResult {
   video_generation_id: string;
   video_file_deleted: boolean;
@@ -370,6 +383,10 @@ export function fetchVideoLibrary(status?: VideoStatus): Promise<LibraryVideo[]>
 
 export function fetchVideoStats(): Promise<VideoStats> {
   return request<VideoStats>("/videos/stats");
+}
+
+export function fetchVideoMetrics(): Promise<VideoMetrics> {
+  return request<VideoMetrics>("/videos/metrics");
 }
 
 export function deleteVideo(id: string): Promise<DeleteVideoResult> {

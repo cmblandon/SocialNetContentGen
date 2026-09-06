@@ -104,6 +104,26 @@ The system SHALL serve a generated video's bytes over HTTP, so the admin panel c
 - **WHEN** a record's `video_file_path` resolves outside `data/videos_generated/`
 - **THEN** refuse to serve it with `403`, rather than reading an arbitrary path from the database — the endpoint turns a stored string into file bytes, so it SHALL NOT serve anything outside the directory this feature owns, whatever the row says
 
+### Requirement: Video Generation Observability
+The system SHALL log each stage of video generation and expose aggregate health metrics, so an operator can tell whether the pipeline is working without reading the database.
+
+#### Scenario: Each pipeline stage is logged
+- **WHEN** a video generation runs
+- **THEN** the narration request, the visual resolution (including whether the Unsplash result or the fallback was used), the subtitle step, and the composition call SHALL each be logged
+- **AND** a failing step SHALL be logged at error level naming the step, since the background task otherwise records the failure only on the database row
+
+#### Scenario: Aggregate health is queryable
+- **WHEN** `GET /videos/metrics` is called
+- **THEN** return the generation success rate, the average composition time, the failure count by pipeline step, and how many generations ran in the last 24 hours
+
+#### Scenario: Composition time is derived, not stored
+- **WHEN** average composition time is computed
+- **THEN** it SHALL be derived from each generated record's `created_at` and `generated_at`, rather than adding a duration column — the timestamps already bound the work
+
+#### Scenario: Recent activity stands in for external API usage
+- **WHEN** the metrics report recent generation volume
+- **THEN** it SHALL be labelled as a proxy for third-party API usage rather than a quota reading: each generation costs roughly one narration synthesis and one image query, but neither provider's true consumption is visible to this service
+
 ### Requirement: Video File Audit Trail
 The system SHALL maintain a complete audit trail of video generation, recording when each attempt was triggered and how it ended.
 

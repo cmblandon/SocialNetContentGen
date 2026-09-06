@@ -6,9 +6,11 @@ import {
   apiErrorDetail,
   deleteVideo,
   fetchVideoLibrary,
+  fetchVideoMetrics,
   fetchVideoStats,
   videoFileUrl,
   type LibraryVideo,
+  type VideoMetrics,
   type VideoStats,
   type VideoStatus,
 } from "@/lib/api";
@@ -32,6 +34,7 @@ const EMPTY_FILTERS: Filters = { platform: "", language: "", status: "", from: "
 export default function VideoLibraryView() {
   const [videos, setVideos] = useState<LibraryVideo[] | null>(null);
   const [stats, setStats] = useState<VideoStats | null>(null);
+  const [metrics, setMetrics] = useState<VideoMetrics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
@@ -46,6 +49,17 @@ export default function VideoLibraryView() {
       })
       .catch(() => {
         if (active) setError("No se pudo cargar la videoteca.");
+      });
+
+    // Fetched separately and allowed to fail: metrics are supplementary, and
+    // folding them into the load above would blank the whole library when
+    // only the health panel is unavailable.
+    fetchVideoMetrics()
+      .then((loadedMetrics) => {
+        if (active) setMetrics(loadedMetrics);
+      })
+      .catch(() => {
+        if (active) setMetrics(null);
       });
     return () => {
       active = false;
@@ -129,7 +143,7 @@ export default function VideoLibraryView() {
         {error && <p role="alert">{error}</p>}
         {notice && <p role="status">{notice}</p>}
 
-        {stats && <StorageUsageBar stats={stats} />}
+        {stats && <StorageUsageBar stats={stats} metrics={metrics} />}
 
         <form className="search-form" onSubmit={(event) => event.preventDefault()}>
           <label htmlFor="filter-platform">Plataforma</label>

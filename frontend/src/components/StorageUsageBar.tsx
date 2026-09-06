@@ -1,11 +1,22 @@
 "use client";
 
-import type { VideoStats } from "@/lib/api";
+import type { VideoMetrics, VideoStats } from "@/lib/api";
 
 /** Warn when free space drops below this fraction of the disk. */
 const LOW_DISK_RATIO = 0.1;
+/** Each generation costs roughly one TTS synthesis and one image query, so
+ * this many in a day is worth flagging before a quota is hit. */
+const HIGH_DAILY_VOLUME = 50;
+/** Below this, something is systematically wrong rather than flaky. */
+const LOW_SUCCESS_RATE = 0.8;
 
-export default function StorageUsageBar({ stats }: { stats: VideoStats }) {
+export default function StorageUsageBar({
+  stats,
+  metrics = null,
+}: {
+  stats: VideoStats;
+  metrics?: VideoMetrics | null;
+}) {
   const capacityKnown = stats.disk_free_mb !== null && stats.disk_total_mb !== null;
   const lowDisk =
     capacityKnown && stats.disk_free_mb! / stats.disk_total_mb! < LOW_DISK_RATIO;
@@ -30,6 +41,31 @@ export default function StorageUsageBar({ stats }: { stats: VideoStats }) {
         // Never rendered as 0: unknown capacity must not read as a full disk.
         <p>
           <b>Espacio libre en disco:</b> desconocido
+        </p>
+      )}
+
+      {metrics && metrics.total_attempts > 0 && (
+        <p>
+          <b>Generaciones:</b> {metrics.generated} exitosas de{" "}
+          {metrics.generated + metrics.failed}
+          {metrics.average_composition_seconds !== null &&
+            ` · ${metrics.average_composition_seconds.toFixed(0)}s por video en promedio`}
+        </p>
+      )}
+
+      {metrics &&
+        metrics.success_rate !== null &&
+        metrics.success_rate < LOW_SUCCESS_RATE && (
+          <p role="alert">
+            Solo {Math.round(metrics.success_rate * 100)}% de las generaciones
+            terminan bien. Revisa los errores en el historial.
+          </p>
+        )}
+
+      {metrics && metrics.generations_last_24h >= HIGH_DAILY_VOLUME && (
+        <p role="alert">
+          {metrics.generations_last_24h} generaciones en las últimas 24 horas.
+          Cada una consume narración e imagen: revisa tu cuota de ElevenLabs.
         </p>
       )}
 

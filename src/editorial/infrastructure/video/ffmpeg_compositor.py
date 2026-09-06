@@ -4,14 +4,18 @@ FFmpegCompositor — wraps FFmpeg for video composition.
 Composites audio + visuals + subtitles into final MP4 video.
 Handles 1080p H.264 codec with AAC audio and hardcoded subtitles.
 """
+import logging
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Optional
 
 from src.editorial.core.exceptions import StoryGenerationError
 from src.editorial.infrastructure.video.audio_duration import probe_duration_ms
+
+logger = logging.getLogger("editorial.ffmpeg")
 
 
 class FFmpegCompositor:
@@ -80,6 +84,7 @@ class FFmpegCompositor:
             duration_seconds=duration_seconds,
         )
 
+        started = time.monotonic()
         try:
             subprocess.run(
                 cmd,
@@ -98,6 +103,13 @@ class FFmpegCompositor:
         # Validate output
         if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
             raise StoryGenerationError(f"FFmpeg produced empty output: {output_path}")
+
+        logger.info(
+            "FFmpeg wrote %s (%.1f MB) in %.1fs",
+            output_path,
+            os.path.getsize(output_path) / (1024 * 1024),
+            time.monotonic() - started,
+        )
 
     def _build_ffmpeg_command(
         self,

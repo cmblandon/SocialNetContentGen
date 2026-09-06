@@ -24,6 +24,7 @@ from src.editorial.application.video_management import (
     delete_video,
     get_chapter_audit_trail,
     get_storage_stats,
+    get_video_metrics,
     list_videos,
     resolve_playable_video_path,
 )
@@ -75,6 +76,17 @@ class VideoStatsResponse(BaseModel):
     missing_on_disk: int
     disk_free_mb: Optional[float]
     disk_total_mb: Optional[float]
+
+
+class VideoMetricsResponse(BaseModel):
+    total_attempts: int
+    generated: int
+    failed: int
+    pending: int
+    success_rate: Optional[float]
+    average_composition_seconds: Optional[float]
+    failures_by_step: dict[str, int]
+    generations_last_24h: int
 
 
 class AuditEntryResponse(BaseModel):
@@ -136,6 +148,24 @@ def video_stats(
         disk_free_mb=stats.disk_free_mb,
         disk_total_mb=stats.disk_total_mb,
     )
+
+
+@router.get("/videos/metrics", response_model=VideoMetricsResponse)
+def video_metrics(session: Session = Depends(get_session)) -> VideoMetricsResponse:
+    """
+    Pipeline health: success rate, average composition time, failures by step.
+
+    Counts every attempt ever made, including deleted ones — deleting a video
+    to free space does not unmake a successful generation, and excluding them
+    would drift the success rate upward as old failures are tidied away.
+    Pending attempts are excluded from the rate, since they have no outcome
+    yet.
+
+    `generations_last_24h` is a proxy for third-party API usage, not a quota
+    reading: each generation costs roughly one narration synthesis and one
+    image query, but neither provider exposes its consumption to this service.
+    """
+    return VideoMetricsResponse(**vars(get_video_metrics(session)))
 
 
 @router.get("/videos/{video_id}/file")

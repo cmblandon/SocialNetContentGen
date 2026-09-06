@@ -14,6 +14,7 @@ so the retry endpoint has something concrete to act on. The one exception is
 the approval gate — generating video for an unapproved script is a caller
 bug, not a recoverable outcome, so it raises.
 """
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,6 +31,8 @@ from src.editorial.infrastructure.persistence.models import (
     VideoGenerationStatus,
 )
 from src.editorial.infrastructure.persistence.subtitle_store import SubtitleStore
+
+logger = logging.getLogger("editorial.video_generation")
 
 # Chapters are authored in Spanish; any other language is a translation.
 SOURCE_LANGUAGE = "es"
@@ -248,6 +251,14 @@ class VideoGenerationUseCase:
         )
         workspace.ensure_directory()
 
+        logger.info(
+            "Starting video generation %s (chapter=%s platform=%s language=%s)",
+            video_generation.id,
+            chapter.id,
+            platform_version.platform.value,
+            language,
+        )
+
         try:
             narration = self._resolve_narration(chapter.script, language)
             audio_duration_ms = self._produce_audio(narration, language, workspace)
@@ -271,10 +282,16 @@ class VideoGenerationUseCase:
         if workspace.audio_path.exists() and workspace.audio_path.stat().st_size > 0:
             # Reused from a previous attempt: measure the file that is already
             # there rather than re-synthesizing it.
+            logger.info("Reusing narration already on disk: %s", workspace.audio_path)
             try:
                 return self._tts_client.get_audio_duration(str(workspace.audio_path))
             except Exception as error:
                 raise _StepError("tts", error) from error
+        logger.info(
+            "Requesting narration from TTS (%s words, language=%s)",
+            len(narration.split()),
+            language,
+        )
         try:
             return self._tts_client.generate_speech(
                 text=narration, language=language, output_path=str(workspace.audio_path)
@@ -286,6 +303,7 @@ class VideoGenerationUseCase:
         self, visual_notes: Optional[str], source_citation: str, workspace: _Workspace
     ) -> None:
         if workspace.visual_path.exists() and workspace.visual_path.stat().st_size > 0:
+            logger.info("Reusing visual already on disk: %s", workspace.visual_path)
             return
 
         directive = (visual_notes or "").strip()
@@ -295,17 +313,26 @@ class VideoGenerationUseCase:
         if directive:
             try:
                 url = self._image_client.search_image(directive)
-            except Exception:
+            except Exception as error:
                 # Search is best-effort: a provider failure falls back rather
                 # than failing the whole generation.
+                logger.warning("Unsplash search failed (%s); using the fallback", error)
                 url = None
 
         if url:
             try:
                 self._image_client.download_image(url, str(workspace.visual_path))
+                logger.info("Using Unsplash image for directive %r", directive)
                 return
-            except Exception:
-                pass  # fall through to the generated background
+            except Exception as error:
+                logger.warning(
+                    "Unsplash image download failed (%s); using the fallback", error
+                )
+
+        logger.warning(
+            "No Unsplash result for directive %r; generating colour+text fallback",
+            directive or "(none)",
+        )
 
         try:
             self._image_client.create_fallback_image(
@@ -333,6 +360,13 @@ class VideoGenerationUseCase:
         """
         try:
             stored = self._subtitle_store.read(chapter_id, language)
+            if stored is not None:
+                logger.info(
+                    "Reusing stored subtitles for %s/%s (edited=%s)",
+                    chapter_id,
+                    language,
+                    stored.edited,
+                )
             if stored is None:
                 draft = self._subtitle_use_case.translate_and_generate_subtitles(
                     script=script,
@@ -347,6 +381,11 @@ class VideoGenerationUseCase:
             raise _StepError("subtitles", error) from error
 
     def _compose(self, workspace: _Workspace, audio_duration_ms: int) -> None:
+        logger.info(
+            "Compositing %s (%.1fs of narration)",
+            workspace.video_path,
+            audio_duration_ms / 1000,
+        )
         try:
             self._compositor.composite(
                 audio_path=str(workspace.audio_path),
@@ -395,6 +434,12 @@ class VideoGenerationUseCase:
         video_generation.status = VideoGenerationStatus.FAILED
         video_generation.error_message = str(error)
         session.commit()
+        # Logged as well as persisted: the background task swallows the
+        # exception, so without this the only trace is a database row nobody
+        # is watching.
+        logger.error(
+            "Video generation %s failed: %s", video_generation.id, error, exc_info=error
+        )
         return VideoGenerationResult(
             video_generation_id=video_generation.id,
             status=VideoGenerationStatus.FAILED,
@@ -411,6 +456,11 @@ class VideoGenerationUseCase:
         video_generation.generated_at = datetime.now(timezone.utc)
         video_generation.error_message = None
         session.commit()
+        logger.info(
+            "Video generation %s finished: %s",
+            video_generation.id,
+            video_generation.video_file_path,
+        )
         return VideoGenerationResult(
             video_generation_id=video_generation.id,
             status=VideoGenerationStatus.GENERATED,

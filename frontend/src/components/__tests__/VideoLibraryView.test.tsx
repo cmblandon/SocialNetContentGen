@@ -10,6 +10,7 @@ jest.mock("@/lib/api", () => {
     ...actual,
     fetchVideoLibrary: jest.fn(),
     fetchVideoStats: jest.fn(),
+    fetchVideoMetrics: jest.fn(),
     deleteVideo: jest.fn(),
   };
 });
@@ -47,9 +48,26 @@ function stats(overrides: Partial<api.VideoStats> = {}): api.VideoStats {
   };
 }
 
+function metrics(overrides: Partial<api.VideoMetrics> = {}): api.VideoMetrics {
+  return {
+    // Deliberately healthy: a default fixture must not incidentally trip the
+    // alerts other tests are asserting the absence of.
+    total_attempts: 3,
+    generated: 3,
+    failed: 0,
+    pending: 0,
+    success_rate: 1,
+    average_composition_seconds: 42,
+    failures_by_step: {},
+    generations_last_24h: 3,
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   jest.resetAllMocks();
   mockedApi.fetchVideoStats.mockResolvedValue(stats());
+  mockedApi.fetchVideoMetrics.mockResolvedValue(metrics());
   jest.spyOn(window, "confirm").mockReturnValue(true);
 });
 
@@ -242,4 +260,65 @@ test("reports a load failure rather than showing an empty library", async () => 
   await waitFor(() =>
     expect(screen.getByRole("alert")).toHaveTextContent("No se pudo cargar la videoteca."),
   );
+});
+
+
+// --- health metrics (17.2, 17.4) --------------------------------------------
+
+test("shows generation counts and average composition time", async () => {
+  mockedApi.fetchVideoLibrary.mockResolvedValue([libraryVideo()]);
+  mockedApi.fetchVideoMetrics.mockResolvedValue(
+    metrics({ success_rate: 0.9, generated: 9, failed: 1 }),
+  );
+
+  render(<VideoLibraryView />);
+
+  await waitFor(() => expect(screen.getByText(/9 exitosas de 10/)).toBeInTheDocument());
+  expect(screen.getByText(/42s por video en promedio/)).toBeInTheDocument();
+});
+
+test("warns when the success rate is low", async () => {
+  mockedApi.fetchVideoLibrary.mockResolvedValue([libraryVideo()]);
+  mockedApi.fetchVideoMetrics.mockResolvedValue(metrics({ success_rate: 0.5 }));
+
+  render(<VideoLibraryView />);
+
+  await waitFor(() =>
+    expect(screen.getByText(/Solo 50% de las generaciones/)).toBeInTheDocument(),
+  );
+});
+
+test("does not warn at a healthy success rate", async () => {
+  mockedApi.fetchVideoLibrary.mockResolvedValue([libraryVideo()]);
+  mockedApi.fetchVideoMetrics.mockResolvedValue(metrics({ success_rate: 0.95 }));
+
+  render(<VideoLibraryView />);
+
+  await waitFor(() => expect(screen.getByText("Contacto de radar")).toBeInTheDocument());
+  expect(screen.queryByText(/de las generaciones/)).not.toBeInTheDocument();
+});
+
+test("warns on high recent volume as an API usage proxy", async () => {
+  mockedApi.fetchVideoLibrary.mockResolvedValue([libraryVideo()]);
+  mockedApi.fetchVideoMetrics.mockResolvedValue(
+    metrics({ generations_last_24h: 80, success_rate: 1 }),
+  );
+
+  render(<VideoLibraryView />);
+
+  await waitFor(() =>
+    expect(screen.getByText(/80 generaciones en las últimas 24 horas/)).toBeInTheDocument(),
+  );
+});
+
+test("the library still renders when metrics are unavailable", async () => {
+  // Metrics are supplementary: a health-panel outage must not blank the
+  // library the operator actually came for.
+  mockedApi.fetchVideoLibrary.mockResolvedValue([libraryVideo()]);
+  mockedApi.fetchVideoMetrics.mockRejectedValue(new Error("metrics down"));
+
+  render(<VideoLibraryView />);
+
+  await waitFor(() => expect(screen.getByText("Contacto de radar")).toBeInTheDocument());
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });

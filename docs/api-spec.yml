@@ -737,6 +737,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /videos/metrics:
+    get:
+      tags:
+      - video-management
+      summary: Video Metrics
+      description: 'Pipeline health: success rate, average composition time, failures
+        by step.
+
+
+        Counts every attempt ever made, including deleted ones — deleting a video
+
+        to free space does not unmake a successful generation, and excluding them
+
+        would drift the success rate upward as old failures are tidied away.
+
+        Pending attempts are excluded from the rate, since they have no outcome
+
+        yet.
+
+
+        `generations_last_24h` is a proxy for third-party API usage, not a quota
+
+        reading: each generation costs roughly one narration synthesis and one
+
+        image query, but neither provider exposes its consumption to this service.'
+      operationId: video_metrics_videos_metrics_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoMetricsResponse'
   /videos/{video_id}/file:
     get:
       tags:
@@ -1591,6 +1624,49 @@ components:
       - created_at
       - generated_at
       title: VideoListItemResponse
+    VideoMetricsResponse:
+      properties:
+        total_attempts:
+          type: integer
+          title: Total Attempts
+        generated:
+          type: integer
+          title: Generated
+        failed:
+          type: integer
+          title: Failed
+        pending:
+          type: integer
+          title: Pending
+        success_rate:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Success Rate
+        average_composition_seconds:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Average Composition Seconds
+        failures_by_step:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Failures By Step
+        generations_last_24h:
+          type: integer
+          title: Generations Last 24H
+      type: object
+      required:
+      - total_attempts
+      - generated
+      - failed
+      - pending
+      - success_rate
+      - average_composition_seconds
+      - failures_by_step
+      - generations_last_24h
+      title: VideoMetricsResponse
     VideoRetryRequest:
       properties:
         video_generation_id:

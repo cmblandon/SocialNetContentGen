@@ -144,7 +144,7 @@
 
 ## 17. Monitoring & Fallback
 
-- [ ] 17.1 Add logging for video generation pipeline (TTS requests, Unsplash queries, FFmpeg calls, errors)
-- [ ] 17.2 Add metrics: video generation success rate, average composition time, storage usage
-- [ ] 17.3 Document fallback behavior: Unsplash → color + text, ElevenLabs quota → retry later, FFmpeg failure → mark as failed
-- [ ] 17.4 Add admin panel alert: low disk space, high API usage
+- [x] 17.1 Add logging for video generation pipeline (TTS requests, Unsplash queries, FFmpeg calls, errors)
+- [x] 17.2 Add `/videos/metrics` endpoint: success rate, average composition time (derived from created_at/generated_at, no new column), failure counts by pipeline step, and recent generation volume
+- [x] 17.3 Document fallback behavior: Unsplash → color + text, ElevenLabs quota → retry later, FFmpeg failure → mark as failed
+- [x] 17.4 Add admin panel alerts: low disk space, and high recent generation volume as a labelled proxy for third-party API usage (neither provider exposes quota to this service)

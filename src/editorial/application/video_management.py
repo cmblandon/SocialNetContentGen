@@ -13,9 +13,10 @@ required to report. The file goes; the row stays and is filtered from
 listings.
 """
 import os
+import re
 import shutil
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -99,6 +100,20 @@ class VideoStorageStats:
     # as "full" would raise a false alarm, and as "empty" would hide a real one.
     disk_free_mb: Optional[float] = None
     disk_total_mb: Optional[float] = None
+
+
+@dataclass
+class VideoMetrics:
+    """Aggregate pipeline health, all derived from existing columns."""
+
+    total_attempts: int
+    generated: int
+    failed: int
+    pending: int
+    success_rate: Optional[float]
+    average_composition_seconds: Optional[float]
+    failures_by_step: dict[str, int]
+    generations_last_24h: int
 
 
 @dataclass
@@ -301,6 +316,69 @@ def get_storage_stats(
         disk_free_mb=disk_free_mb,
         disk_total_mb=disk_total_mb,
     )
+
+
+# error_message is written as "<step> step failed: ...", so the step name is
+# recoverable without a dedicated column.
+_STEP_PATTERN = re.compile(r"^(\w+) step failed")
+
+
+def get_video_metrics(session: Session, now: Optional[datetime] = None) -> VideoMetrics:
+    """
+    Pipeline health across every attempt ever made, deleted ones included.
+
+    Deleted attempts still count: removing a video to free disk space does not
+    unmake the fact that it generated successfully, and excluding them would
+    make the success rate drift upward as old failures are tidied away.
+
+    Composition time is derived from created_at/generated_at rather than
+    stored — the timestamps already bound the work, so a duration column would
+    be a second source of truth for the same fact.
+    """
+    now = now or datetime.now(timezone.utc)
+    records = session.execute(select(VideoGeneration)).scalars().all()
+
+    generated = [r for r in records if r.status == VideoGenerationStatus.GENERATED]
+    failed = [r for r in records if r.status == VideoGenerationStatus.FAILED]
+    pending = [r for r in records if r.status == VideoGenerationStatus.PENDING]
+
+    # Pending attempts are excluded from the rate: they have not yet had an
+    # outcome, and counting them as failures would understate health while a
+    # batch is still running.
+    decided = len(generated) + len(failed)
+    success_rate = round(len(generated) / decided, 3) if decided else None
+
+    durations = [
+        (r.generated_at - r.created_at).total_seconds()
+        for r in generated
+        if r.generated_at is not None and r.created_at is not None
+    ]
+    average = round(sum(durations) / len(durations), 2) if durations else None
+
+    failures_by_step: dict[str, int] = {}
+    for record in failed:
+        match = _STEP_PATTERN.match(record.error_message or "")
+        step = match.group(1) if match else "unknown"
+        failures_by_step[step] = failures_by_step.get(step, 0) + 1
+
+    cutoff = now - timedelta(hours=24)
+    recent = sum(1 for r in records if _as_utc(r.created_at) >= cutoff)
+
+    return VideoMetrics(
+        total_attempts=len(records),
+        generated=len(generated),
+        failed=len(failed),
+        pending=len(pending),
+        success_rate=success_rate,
+        average_composition_seconds=average,
+        failures_by_step=failures_by_step,
+        generations_last_24h=recent,
+    )
+
+
+def _as_utc(value: datetime) -> datetime:
+    """SQLite hands back naive datetimes; compare them as UTC."""
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 def get_chapter_audit_trail(session: Session, chapter_id: str) -> list[AuditEntry]:

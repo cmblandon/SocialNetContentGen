@@ -3,6 +3,7 @@ ElevenLabsTextToSpeechClient — wraps ElevenLabs API for TTS audio generation.
 
 Handles voice selection by language, audio generation, and duration retrieval.
 """
+import logging
 import os
 from typing import Optional
 
@@ -10,6 +11,8 @@ import httpx
 
 from src.editorial.core.exceptions import StoryGenerationError
 from src.editorial.infrastructure.video.audio_duration import probe_duration_ms
+
+logger = logging.getLogger("editorial.elevenlabs")
 
 
 class ElevenLabsTextToSpeechClient:
@@ -101,8 +104,12 @@ class ElevenLabsTextToSpeechClient:
             audio_data = response.content
             with open(output_path, "wb") as f:
                 f.write(audio_data)
+            logger.info(
+                "ElevenLabs returned %d bytes for voice %s", len(audio_data), voice_id
+            )
 
         except httpx.HTTPError as error:
+            logger.error("ElevenLabs TTS request failed for voice %s: %s", voice_id, error)
             raise StoryGenerationError(f"ElevenLabs TTS request failed: {error}") from error
 
         # Measured from the file just written, not estimated from the text:
