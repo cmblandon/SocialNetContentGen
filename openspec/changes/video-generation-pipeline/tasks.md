@@ -117,12 +117,12 @@
 
 ## 14. Frontend: Video Management Views
 
-- [ ] 14.1 Add "Videos" page/tab listing all generated videos with metadata (size, platform, language, generated date). Duration deferred: it needs a `duration_seconds` column and migration, and chapter length is already constrained to 150–220 words (~60–90s), so it is largely implied
-- [ ] 14.2 Add filters: by platform, language, status, date range
-- [ ] 14.3 Add storage usage indicator (total used, remaining disk space warning)
-- [ ] 14.4 Add delete button for individual videos
-- [ ] 14.5 Add "Download all" button for batch export
-- [ ] 14.6 Add unit tests for video management UI
+- [x] 14.1 Add "Videos" page/tab listing all generated videos with metadata (size, platform, language, generated date). Duration deferred: it needs a `duration_seconds` column and migration, and chapter length is already constrained to 150–220 words (~60–90s), so it is largely implied
+- [x] 14.2 Add filters: by platform, language, status, date range
+- [x] 14.3 Add storage usage indicator (total used, remaining disk space warning)
+- [x] 14.4 Add delete button for individual videos
+- [x] 14.5 Add "Download all" button for batch export
+- [x] 14.6 Add unit tests for video management UI
 
 ## 15. Integration & End-to-End Testing
 
