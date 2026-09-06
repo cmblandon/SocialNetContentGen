@@ -83,6 +83,22 @@ The system SHALL support querying and deleting video files (for storage manageme
 - **WHEN** `GET /videos/stats` is called
 - **THEN** return total storage used, count of videos by status, and largest videos
 
+### Requirement: Video File Retrieval
+The system SHALL serve a generated video's bytes over HTTP, so the admin panel can preview and download it. The stored `video_file_path` is a server-side filesystem path and is not reachable by a browser on its own.
+
+#### Scenario: A generated video is streamed to the browser
+- **WHEN** `GET /videos/{id}/file` is called for a generated video whose file exists
+- **THEN** return the MP4 with content type `video/mp4`
+- **AND** honour HTTP `Range` requests, so the player can seek without downloading the whole file first
+
+#### Scenario: Retrieval refuses anything without a playable file
+- **WHEN** the record does not exist, has been soft-deleted, has no `video_file_path`, or its file is missing from disk
+- **THEN** respond `404`
+
+#### Scenario: Retrieval is confined to the video directory
+- **WHEN** a record's `video_file_path` resolves outside `data/videos_generated/`
+- **THEN** refuse to serve it with `403`, rather than reading an arbitrary path from the database — the endpoint turns a stored string into file bytes, so it SHALL NOT serve anything outside the directory this feature owns, whatever the row says
+
 ### Requirement: Video File Audit Trail
 The system SHALL maintain a complete audit trail of video generation, recording when each attempt was triggered and how it ended.
 

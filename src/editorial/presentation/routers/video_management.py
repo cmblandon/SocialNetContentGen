@@ -6,9 +6,11 @@ Library-wide rather than chapter-scoped: these serve storage management
 editorial flow that /chapters/{id}/video covers.
 """
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -16,14 +18,18 @@ from src.editorial.application.script_approval import ChapterNotFoundError
 from src.editorial.application.video_management import (
     DEFAULT_LARGEST_LIMIT,
     MAX_LARGEST_LIMIT,
+    VideoFileNotAvailableError,
+    VideoFileOutsideRootError,
     VideoGenerationNotFoundError,
     delete_video,
     get_chapter_audit_trail,
     get_storage_stats,
     list_videos,
+    resolve_playable_video_path,
 )
 from src.editorial.infrastructure.persistence.models import VideoGenerationStatus
 from src.editorial.infrastructure.persistence.session import get_session
+from src.editorial.presentation.dependencies import get_video_root
 
 router = APIRouter(tags=["video-management"])
 
@@ -110,6 +116,29 @@ def video_stats(
         largest_videos=[LargestVideoResponse(**vars(v)) for v in stats.largest_videos],
         missing_on_disk=stats.missing_on_disk,
     )
+
+
+@router.get("/videos/{video_id}/file")
+def download_video_file(
+    video_id: str,
+    session: Session = Depends(get_session),
+    video_root: Path = Depends(get_video_root),
+) -> FileResponse:
+    """
+    Serve the MP4 itself.
+
+    The admin panel cannot play `video_file_path` directly — it is a path on
+    the server's filesystem, not a URL. Starlette's FileResponse honours
+    Range requests, so the player can seek without pulling the whole file.
+    """
+    try:
+        path = resolve_playable_video_path(session, video_id, video_root)
+    except (VideoGenerationNotFoundError, VideoFileNotAvailableError) as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except VideoFileOutsideRootError as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
+
+    return FileResponse(path, media_type="video/mp4", filename=path.name)
 
 
 @router.delete("/videos/{video_id}", response_model=VideoDeletionResponse)

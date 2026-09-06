@@ -29,6 +29,7 @@ from src.editorial.infrastructure.persistence.models import (
 )
 from src.editorial.infrastructure.persistence.session import get_session
 from src.editorial.presentation.app import app
+from src.editorial.presentation.dependencies import get_video_root
 
 
 @pytest.fixture
@@ -43,7 +44,13 @@ def test_engine():
 
 
 @pytest.fixture
-def client(test_engine):
+def media_root(tmp_path):
+    """Stands in for data/, so no test ever touches the real tree."""
+    return tmp_path
+
+
+@pytest.fixture
+def client(test_engine, media_root):
     TestSessionLocal = sessionmaker(bind=test_engine)
 
     def override_get_session():
@@ -54,14 +61,10 @@ def client(test_engine):
             session.close()
 
     app.dependency_overrides[get_session] = override_get_session
+    # The file endpoint is confined to this root; point it at the tmp tree.
+    app.dependency_overrides[get_video_root] = lambda: media_root / "videos_generated"
     yield TestClient(app)
     app.dependency_overrides.clear()
-
-
-@pytest.fixture
-def media_root(tmp_path):
-    """Stands in for data/, so no test ever touches the real tree."""
-    return tmp_path
 
 
 def _seed_chapter(engine) -> str:
@@ -312,6 +315,112 @@ def test_deleted_video_is_hidden_from_chapter_video_listing(
     client.delete(f"/videos/{video_id}")
 
     assert client.get(f"/chapters/{chapter_id}/video").json() == []
+
+
+# --- GET /videos/{id}/file --------------------------------------------------
+
+
+def test_file_endpoint_serves_the_mp4(client, test_engine, media_root):
+    chapter_id = _seed_chapter(test_engine)
+    video, srt = _video_paths(media_root)
+    video_id = _add_video(
+        test_engine, chapter_id, video_path=video, subtitle_path=srt, size_bytes=2048
+    )
+
+    response = client.get(f"/videos/{video_id}/file")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "video/mp4"
+    assert response.content == b"x" * 2048
+
+
+def test_file_endpoint_supports_range_requests(client, test_engine, media_root):
+    """Seeking in a <video> player depends on this."""
+    chapter_id = _seed_chapter(test_engine)
+    video, _ = _video_paths(media_root)
+    video_id = _add_video(test_engine, chapter_id, video_path=video, size_bytes=2048)
+
+    response = client.get(f"/videos/{video_id}/file", headers={"Range": "bytes=0-99"})
+
+    assert response.status_code == 206
+    assert len(response.content) == 100
+    assert "bytes 0-99/2048" in response.headers["content-range"]
+
+
+def test_file_endpoint_404s_for_a_pending_video(client, test_engine):
+    chapter_id = _seed_chapter(test_engine)
+    video_id = _add_video(
+        test_engine, chapter_id, status=VideoGenerationStatus.PENDING
+    )
+
+    assert client.get(f"/videos/{video_id}/file").status_code == 404
+
+
+def test_file_endpoint_404s_when_the_file_is_gone(client, test_engine, media_root):
+    chapter_id = _seed_chapter(test_engine)
+    video, _ = _video_paths(media_root)
+    video_id = _add_video(test_engine, chapter_id, video_path=video)
+    video.unlink()
+
+    assert client.get(f"/videos/{video_id}/file").status_code == 404
+
+
+def test_file_endpoint_404s_for_a_deleted_video(client, test_engine, media_root):
+    chapter_id = _seed_chapter(test_engine)
+    video, srt = _video_paths(media_root)
+    video_id = _add_video(test_engine, chapter_id, video_path=video, subtitle_path=srt)
+
+    client.delete(f"/videos/{video_id}")
+
+    assert client.get(f"/videos/{video_id}/file").status_code == 404
+
+
+def test_file_endpoint_404s_for_unknown_id(client):
+    assert client.get("/videos/no-such-id/file").status_code == 404
+
+
+def test_file_endpoint_refuses_a_path_outside_the_video_root(
+    client, test_engine, media_root, tmp_path
+):
+    """
+    The endpoint turns a database string into file bytes on the wire, so it
+    must not serve anything outside the directory this feature owns —
+    whatever the row happens to say.
+    """
+    chapter_id = _seed_chapter(test_engine)
+    secret = tmp_path / "outside" / "secret.mp4"
+    secret.parent.mkdir(parents=True, exist_ok=True)
+    secret.write_bytes(b"not yours")
+
+    video_id = _add_video(test_engine, chapter_id, video_path=secret)
+
+    response = client.get(f"/videos/{video_id}/file")
+
+    assert response.status_code == 403
+    assert b"not yours" not in response.content
+
+
+def test_file_endpoint_refuses_traversal_out_of_the_video_root(
+    client, test_engine, media_root, tmp_path
+):
+    """Confinement is checked on the resolved path, so `..` cannot escape."""
+    chapter_id = _seed_chapter(test_engine)
+    secret = tmp_path / "outside" / "secret.mp4"
+    secret.parent.mkdir(parents=True, exist_ok=True)
+    secret.write_bytes(b"not yours")
+
+    traversal = (
+        media_root / "videos_generated" / "tiktok" / "es" / ".." / ".." / ".." / ".."
+        / "outside" / "secret.mp4"
+    )
+    (media_root / "videos_generated" / "tiktok" / "es").mkdir(parents=True, exist_ok=True)
+    video_id = _add_video(test_engine, chapter_id, video_path=None)
+    with Session(test_engine) as session:
+        record = session.get(VideoGeneration, video_id)
+        record.video_file_path = str(traversal)
+        session.commit()
+
+    assert client.get(f"/videos/{video_id}/file").status_code == 403
 
 
 # --- GET /videos/stats ------------------------------------------------------

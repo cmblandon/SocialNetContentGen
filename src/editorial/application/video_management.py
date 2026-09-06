@@ -15,6 +15,7 @@ listings.
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import select
@@ -34,6 +35,20 @@ MAX_LARGEST_LIMIT = 100
 
 class VideoGenerationNotFoundError(Exception):
     """Raised when a video record does not exist, or has already been deleted."""
+
+
+class VideoFileNotAvailableError(Exception):
+    """Raised when a record has no playable file — never generated, or the
+    file is gone from disk."""
+
+
+class VideoFileOutsideRootError(Exception):
+    """Raised when a record's path resolves outside the video directory.
+
+    This endpoint turns a string stored in the database into file bytes on
+    the wire. Paths are internally constructed today, but nothing enforces
+    that, so serving is confined to the directory this feature owns rather
+    than trusting the row."""
 
 
 @dataclass
@@ -158,6 +173,41 @@ def delete_video(session: Session, video_generation_id: str) -> VideoDeletionOut
         video_file_retained_reason=video_reason,
         subtitle_file_retained_reason=subtitle_reason,
     )
+
+
+def resolve_playable_video_path(
+    session: Session, video_generation_id: str, video_root: Path
+) -> Path:
+    """
+    Resolve a record to a file that is safe to serve.
+
+    Confinement is checked on the resolved path, so a stored value
+    containing `..` cannot escape the video directory.
+    """
+    record = session.get(VideoGeneration, video_generation_id)
+    if record is None or record.deleted_at is not None:
+        raise VideoGenerationNotFoundError(
+            f"VideoGeneration {video_generation_id} does not exist or is already deleted."
+        )
+    if not record.video_file_path:
+        raise VideoFileNotAvailableError(
+            f"VideoGeneration {video_generation_id} has no video file "
+            f"(status '{record.status.value}')."
+        )
+
+    path = Path(record.video_file_path).resolve()
+    root = Path(video_root).resolve()
+    if not path.is_relative_to(root):
+        raise VideoFileOutsideRootError(
+            f"VideoGeneration {video_generation_id} points outside {root}."
+        )
+
+    if not path.is_file():
+        raise VideoFileNotAvailableError(
+            f"VideoGeneration {video_generation_id} has no file at {path}."
+        )
+
+    return path
 
 
 def get_storage_stats(

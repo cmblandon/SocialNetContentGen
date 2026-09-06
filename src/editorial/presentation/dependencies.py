@@ -3,6 +3,8 @@ Shared FastAPI dependency providers for the editorial service, factored
 out so multiple routers (research, approval) don't each redefine
 get_memory_store/get_llm_client.
 """
+from pathlib import Path
+
 from fastapi import Depends
 
 from src.config.settings import DATA_DIR, settings
@@ -69,6 +71,11 @@ def get_subtitle_generation_use_case(
     llm_client: AnthropicLLMClient = Depends(get_llm_client),
 ) -> SubtitleGenerationUseCase:
     return SubtitleGenerationUseCase(llm_client=llm_client, cache_dir=SUBTITLE_CACHE_DIR)
+
+
+def get_video_root() -> Path:
+    """Directory the video-serving endpoint is confined to."""
+    return VIDEO_ROOT
 
 
 def get_image_client() -> UnsplashImageClient:

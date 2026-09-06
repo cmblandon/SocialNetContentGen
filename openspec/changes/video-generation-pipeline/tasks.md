@@ -85,6 +85,8 @@
 - [x] 10.3 Create `/videos/stats` GET endpoint (total storage, count by status, largest videos)
 - [x] 10.4 Create `/chapters/{id}/audit` GET endpoint (audit trail of video generation attempts)
 - [x] 10.5 Add unit tests for video management endpoints
+- [x] 10.6 Create `/videos/{id}/file` GET endpoint streaming the MP4 with Range support (the admin panel cannot play a server-side filesystem path; required by 13.3 and 13.5)
+- [x] 10.7 Add unit tests for video file retrieval, including path confinement to `data/videos_generated/`
 
 ## 11. Frontend: Script Approval View
 
