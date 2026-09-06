@@ -19,6 +19,7 @@ jest.mock("@/lib/api", () => {
     fetchCheckpointSummary: jest.fn(),
     fetchSourceUrls: jest.fn(),
     fetchSubtitles: jest.fn(),
+    fetchChapterVideos: jest.fn(),
     generateSubtitles: jest.fn(),
     updateSubtitleTrack: jest.fn(),
     approveScript: jest.fn(),
@@ -75,6 +76,7 @@ beforeEach(() => {
   mockedApi.fetchCheckpointSummary.mockResolvedValue({ pending: 0, failed: 0 });
   mockedApi.fetchSourceUrls.mockResolvedValue([]);
   mockedApi.fetchSubtitles.mockResolvedValue([]);
+  mockedApi.fetchChapterVideos.mockResolvedValue([]);
 });
 
 async function openPreview() {

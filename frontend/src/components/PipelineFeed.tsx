@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ScriptReviewCard from "@/components/ScriptReviewCard";
 import SubtitleReviewCard from "@/components/SubtitleReviewCard";
+import VideoGenerationCard from "@/components/VideoGenerationCard";
 import {
   apiErrorDetail,
   approvePlatformVersion,
@@ -11,11 +12,14 @@ import {
   fetchPendingChapters,
   fetchPendingScripts,
   fetchSourceUrls,
+  fetchChapterVideos,
   fetchSubtitles,
   generateSubtitles,
+  generateVideo,
   publishPlatformVersion,
   rejectScript,
   resumePipeline,
+  retryVideo,
   runResearch,
   updateScript,
   updateSubtitleTrack,
@@ -25,6 +29,7 @@ import {
   type PlatformVersionSummary,
   type SubtitleLanguage,
   type SubtitleTrack,
+  type VideoGeneration,
 } from "@/lib/api";
 
 const NETWORKS = [
@@ -87,6 +92,8 @@ export default function PipelineFeed() {
   const [subtitlesById, setSubtitlesById] = useState<Record<string, SubtitleTrack[]>>({});
   const [subtitleErrors, setSubtitleErrors] = useState<Record<string, string>>({});
   const [busyChapterIds, setBusyChapterIds] = useState<string[]>([]);
+  const [videosById, setVideosById] = useState<Record<string, VideoGeneration[]>>({});
+  const [videoErrors, setVideoErrors] = useState<Record<string, string>>({});
 
   const loadChapters = useCallback(async () => {
     try {
@@ -264,6 +271,61 @@ export default function PipelineFeed() {
       setSubtitleErrors((prev) => ({
         ...prev,
         [chapterId]: apiErrorDetail(caught) ?? "No se pudieron guardar los subtítulos.",
+      }));
+    } finally {
+      markBusy(chapterId, false);
+    }
+  }
+
+  const loadVideos = useCallback(async (chapterId: string) => {
+    try {
+      const loaded = await fetchChapterVideos(chapterId);
+      setVideosById((prev) => ({ ...prev, [chapterId]: loaded }));
+    } catch (caught) {
+      setVideoErrors((prev) => ({
+        ...prev,
+        [chapterId]: apiErrorDetail(caught) ?? "No se pudo consultar el estado del video.",
+      }));
+    }
+  }, []);
+
+  async function handleVideoGenerate(
+    chapterId: string,
+    options: { platforms: string[]; languages: string[] },
+  ) {
+    markBusy(chapterId, true);
+    setVideoErrors((prev) => {
+      const next = { ...prev };
+      delete next[chapterId];
+      return next;
+    });
+    try {
+      const created = await generateVideo(chapterId, options);
+      // The 202 carries the pending rows, so the card shows "generating"
+      // immediately instead of waiting for the first poll five seconds later.
+      setVideosById((prev) => ({
+        ...prev,
+        [chapterId]: [...(prev[chapterId] ?? []), ...created],
+      }));
+    } catch (caught) {
+      setVideoErrors((prev) => ({
+        ...prev,
+        [chapterId]: apiErrorDetail(caught) ?? "No se pudo generar el video.",
+      }));
+    } finally {
+      markBusy(chapterId, false);
+    }
+  }
+
+  async function handleVideoRetry(chapterId: string, videoGenerationId: string) {
+    markBusy(chapterId, true);
+    try {
+      await retryVideo(chapterId, videoGenerationId || undefined);
+      await loadVideos(chapterId);
+    } catch (caught) {
+      setVideoErrors((prev) => ({
+        ...prev,
+        [chapterId]: apiErrorDetail(caught) ?? "No se pudo reintentar la generación.",
       }));
     } finally {
       markBusy(chapterId, false);
@@ -452,7 +514,10 @@ export default function PipelineFeed() {
                 <button
                   className="btn btn-preview"
                   onClick={() => {
-                    if (!previewOpen) loadSubtitles(chapter.id);
+                    if (!previewOpen) {
+                      loadSubtitles(chapter.id);
+                      loadVideos(chapter.id);
+                    }
                     togglePreview(chapter.id);
                   }}
                 >
@@ -502,6 +567,19 @@ export default function PipelineFeed() {
                       error={subtitleErrors[chapter.id] ?? null}
                       onGenerate={handleSubtitleGenerate}
                       onSave={handleSubtitleSave}
+                    />
+                  )}
+
+                  {script?.script_approved && (
+                    <VideoGenerationCard
+                      chapterId={chapter.id}
+                      scriptApproved
+                      videos={videosById[chapter.id] ?? null}
+                      busy={chapterBusy}
+                      error={videoErrors[chapter.id] ?? null}
+                      onGenerate={handleVideoGenerate}
+                      onRetry={handleVideoRetry}
+                      onPoll={loadVideos}
                     />
                   )}
                 </>

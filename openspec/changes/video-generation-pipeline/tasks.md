@@ -108,12 +108,12 @@
 
 ## 13. Frontend: Video Generation UI
 
-- [ ] 13.1 Create `VideoGenerationCard` component (show generation status: pending/generated/failed, display generated video preview)
-- [ ] 13.2 Add "Generate Video" button in Pipeline feed (triggers generation, shows loading)
-- [ ] 13.3 Implement video preview modal (show MP4 preview with subtitles)
-- [ ] 13.4 Add retry button for failed video generation
-- [ ] 13.5 Add download/share buttons for generated videos
-- [ ] 13.6 Add polling for async video generation status (e.g., poll every 5s until status != pending)
+- [x] 13.1 Create `VideoGenerationCard` component (show generation status: pending/generated/failed, display generated video preview)
+- [x] 13.2 Add "Generate Video" button in Pipeline feed (triggers generation, shows loading)
+- [x] 13.3 Implement video preview modal (show MP4 preview with subtitles)
+- [x] 13.4 Add retry button for failed video generation
+- [x] 13.5 Add download/share buttons for generated videos
+- [x] 13.6 Add polling for async video generation status (e.g., poll every 5s until status != pending)
 
 ## 14. Frontend: Video Management Views
 
