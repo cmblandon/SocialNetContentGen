@@ -250,3 +250,53 @@ def test_raises_when_chapter_contains_an_overstated_claim(overstated_phrase):
             published_date="2024-03-01",
             narrative_angle="angle",
         )
+
+
+def test_raises_when_chapter_is_missing_visual_directives():
+    payload = {"summary": "s", "chapters": [_chapter(visual_notes="")]}
+    use_case, _ = _use_case(payload)
+
+    with pytest.raises(StoryGenerationError):
+        use_case.write_story(
+            document_text=DOCUMENT_TEXT,
+            agency="AARO",
+            doc_type="report",
+            published_date="2024-03-01",
+            narrative_angle="angle",
+        )
+
+
+def test_accepts_visual_directives_in_chapter():
+    visual_directives = "Show declassified radar log on screen with timestamp overlay. Transition to archival footage of military base at 0200 hours."
+    payload = {
+        "summary": "s",
+        "chapters": [_chapter(visual_notes=visual_directives)],
+    }
+    use_case, _ = _use_case(payload)
+
+    draft = use_case.write_story(
+        document_text=DOCUMENT_TEXT,
+        agency="AARO",
+        doc_type="report",
+        published_date="2024-03-01",
+        narrative_angle="angle",
+    )
+
+    assert draft.chapters[0].visual_notes == visual_directives
+
+
+def test_prompt_includes_reel_optimization_constraints():
+    payload = {"summary": "s", "chapters": [_chapter()]}
+    use_case, llm = _use_case(payload)
+
+    use_case.write_story(
+        document_text=DOCUMENT_TEXT,
+        agency="AARO",
+        doc_type="report",
+        published_date="2024-03-01",
+        narrative_angle="angle",
+    )
+
+    assert "150–220 words" in llm.last_prompt
+    assert "visual directives" in llm.last_prompt
+    assert "pacing cues" in llm.last_prompt

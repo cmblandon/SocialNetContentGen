@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -130,6 +130,8 @@ class PlatformVersion(Base):
     status: Mapped[ApprovalStatus] = mapped_column(
         SAEnum(ApprovalStatus), nullable=False, default=ApprovalStatus.PENDING_REVIEW
     )
+    script_approved: Mapped[bool] = mapped_column(nullable=False, default=False)
+    script_approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
@@ -137,6 +139,9 @@ class PlatformVersion(Base):
 
     chapter: Mapped["Chapter"] = relationship(back_populates="platform_versions")
     publish_records: Mapped[list["PublishRecord"]] = relationship(
+        back_populates="platform_version", cascade="all, delete-orphan"
+    )
+    video_generations: Mapped[list["VideoGeneration"]] = relationship(
         back_populates="platform_version", cascade="all, delete-orphan"
     )
 
@@ -216,3 +221,37 @@ class DiscoveredDocument(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
+
+
+class VideoGenerationStatus(str, enum.Enum):
+    """Lifecycle of a VideoGeneration record."""
+
+    PENDING = "pending"
+    GENERATED = "generated"
+    FAILED = "failed"
+
+
+class VideoGeneration(Base):
+    """Video file generated from an approved script (video-generation-pipeline).
+    One row per platform version and language combination."""
+
+    __tablename__ = "video_generations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
+    platform_version_id: Mapped[str] = mapped_column(
+        ForeignKey("platform_versions.id"), nullable=False
+    )
+    language: Mapped[str] = mapped_column(String(20), nullable=False)
+    video_file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    subtitle_file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    status: Mapped[VideoGenerationStatus] = mapped_column(
+        SAEnum(VideoGenerationStatus), nullable=False, default=VideoGenerationStatus.PENDING
+    )
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    retry_of_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("video_generations.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    generated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    platform_version: Mapped["PlatformVersion"] = relationship(back_populates="video_generations")

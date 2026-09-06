@@ -64,3 +64,32 @@ class PlatformAdaptations:
     instagram: InstagramAdaptation
     x: XAdaptation
     facebook: FacebookAdaptation
+
+
+@dataclass
+class SubtitleLine:
+    """One subtitle line in SRT format."""
+
+    index: int
+    start_time: str
+    end_time: str
+    text: str
+
+    def to_srt_block(self) -> str:
+        """Render as SRT block: index, timecode, text."""
+        return f"{self.index}\n{self.start_time} --> {self.end_time}\n{self.text}"
+
+
+@dataclass
+class SubtitleDraft:
+    """Subtitles for one chapter, one language."""
+
+    language: str
+    subtitle_lines: list[SubtitleLine] = field(default_factory=list)
+
+    def to_srt(self) -> str:
+        """Render all subtitle lines as complete SRT file."""
+        if not self.subtitle_lines:
+            return ""
+        blocks = [line.to_srt_block() for line in self.subtitle_lines]
+        return "\n\n".join(blocks)

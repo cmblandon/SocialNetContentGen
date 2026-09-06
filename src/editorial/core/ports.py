@@ -91,3 +91,69 @@ class ILLMClient(Protocol):
     def complete(self, prompt: str) -> str:
         """Sends prompt to the cloud LLM and returns its raw text response."""
         ...
+
+
+@runtime_checkable
+class ITextToSpeechClient(Protocol):
+    """
+    Contract for the TTS provider used by video-generation.
+    Implementation: ElevenLabsTextToSpeechClient.
+    """
+
+    def generate_speech(self, text: str, language: str, output_path: str) -> int:
+        """
+        Synthesizes `text` in `language` ('es' or 'en') and writes the audio
+        to output_path. Returns the audio duration in milliseconds, which
+        subtitle timing depends on — so it must be measured from the written
+        audio, never estimated from the input text.
+        """
+        ...
+
+    def get_audio_duration(self, audio_path: str) -> int:
+        """
+        Returns the measured duration of an existing audio file, in
+        milliseconds. Lets a retry re-derive timing from audio a previous
+        attempt already synthesized instead of paying for TTS again.
+        """
+        ...
+
+
+@runtime_checkable
+class IImageClient(Protocol):
+    """
+    Contract for the visual source used by video-generation. Search returning
+    None is a normal outcome (no match, no API key, provider down), not an
+    error — the caller falls back to a generated color+text image per
+    specs/video-generation-from-script.
+    """
+
+    def search_image(self, query: str) -> Optional[str]:
+        """Returns a URL for the best match, or None when there is none."""
+        ...
+
+    def download_image(self, url: str, output_path: str) -> None:
+        """Downloads the image at `url` to output_path."""
+        ...
+
+    def create_fallback_image(self, text: str, output_path: str) -> None:
+        """Writes a solid-color image with `text` overlaid to output_path."""
+        ...
+
+
+@runtime_checkable
+class IVideoCompositor(Protocol):
+    """
+    Contract for the video assembler used by video-generation.
+    Implementation: FFmpegCompositor.
+    """
+
+    def composite(
+        self,
+        audio_path: str,
+        visual_path: str,
+        subtitle_path: Optional[str],
+        output_path: str,
+        duration_seconds: Optional[int] = None,
+    ) -> None:
+        """Assembles audio + visual + subtitles into an MP4 at output_path."""
+        ...

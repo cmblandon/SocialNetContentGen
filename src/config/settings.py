@@ -69,6 +69,15 @@ class Settings(BaseSettings):
     postiz_api_key: str = ""
     postiz_base_url: str = "http://localhost:5000"
 
+    # --- Video generation (video-generation-pipeline) ---
+    # One fixed "Archivo Desclasificado" voice per language, per
+    # specs/video-generation-from-script "Consistent voice per language".
+    elevenlabs_spanish_voice_id: str = ""
+    elevenlabs_english_voice_id: str = ""
+    # Unsplash works unauthenticated at a lower rate limit; an access key
+    # raises it. Empty means "no search" — the color+text fallback is used.
+    unsplash_access_key: str = ""
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

@@ -34,8 +34,17 @@ _QUOTE_PATTERN = re.compile(r'"([^"]+)"')
 
 _PROMPT_TEMPLATE = """\
 You are the writer agent of "Archivo Desclasificado". Convert the official \
-document below into a hook-driven, fact-bound story. Never invent details \
-or attribute quotes not present in the document.
+document below into a hook-driven, fact-bound story optimized for short-form \
+video (TikTok/Instagram Reels, 15–60 seconds).
+
+CRITICAL CONSTRAINTS:
+- Each chapter MUST be 150–220 words (approximately 60–90 seconds at natural \
+speaking pace).
+- MUST include visual directives: concrete suggestions for visuals (e.g., \
+"archival footage of military radar", "declassified document on screen", \
+"news clip from 1985").
+- MUST include pacing cues: where to pause, emphasize, or transition.
+- Never invent details or attribute quotes not present in the document.
 
 Agency: {agency}
 Document type: {doc_type}
@@ -47,7 +56,8 @@ Document text:
 
 Respond with JSON matching this shape:
 {{"summary": "...", "chapters": [{{"title": "...", "script": "...", \
-"visual_notes": "...", "source_citation": "..."}}]}}
+"visual_notes": "visual directives and pacing cues here", \
+"source_citation": "..."}}]}}
 """
 
 
@@ -94,16 +104,18 @@ class StoryWritingUseCase:
     ) -> ChapterDraft:
         script = raw_chapter.get("script", "")
         source_citation = raw_chapter.get("source_citation", "")
+        visual_notes = raw_chapter.get("visual_notes", "")
 
         self._validate_word_count(script, chapter_index)
         self._validate_source_citation(source_citation, chapter_index)
         self._validate_no_fabricated_quotes(script, document_text, chapter_index)
         self._validate_no_overstated_claims(script, chapter_index)
+        self._validate_visual_directives(visual_notes, chapter_index)
 
         return ChapterDraft(
             title=raw_chapter.get("title", ""),
             script=script,
-            visual_notes=raw_chapter.get("visual_notes", ""),
+            visual_notes=visual_notes,
             source_citation=source_citation,
             chapter_index=chapter_index,
         )
@@ -141,3 +153,10 @@ class StoryWritingUseCase:
                     f"Chapter {chapter_index} contains overstated phrasing: "
                     f'"{phrase}"'
                 )
+
+    def _validate_visual_directives(self, visual_notes: str, chapter_index: int) -> None:
+        if not visual_notes.strip():
+            raise StoryGenerationError(
+                f"Chapter {chapter_index} is missing visual directives. "
+                f"Must include concrete visual suggestions (e.g., 'archival footage', 'document on screen')."
+            )
