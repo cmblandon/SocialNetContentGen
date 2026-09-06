@@ -41,6 +41,15 @@ class EmptyScriptError(Exception):
     would produce a silent video."""
 
 
+class NoPlatformVersionsError(Exception):
+    """Raised when approving a chapter that has no platform versions.
+
+    Approval is stored on the platform versions, so there would be nowhere to
+    record it: the call would report success while `is_script_approved` kept
+    reporting False, and the video gate would keep refusing. Better to reject
+    than to hand back an approval that does not exist."""
+
+
 @dataclass
 class ScriptApprovalOutcome:
     """State of a chapter's script after an approve/reject/update action."""
@@ -69,6 +78,11 @@ class ChapterScriptSummary:
 def approve_chapter_script(session: Session, chapter_id: str) -> ScriptApprovalOutcome:
     """Mark a chapter's script approved, stamping the approval time."""
     chapter = _require_chapter(session, chapter_id)
+    if not chapter.platform_versions:
+        raise NoPlatformVersionsError(
+            f"Chapter {chapter_id} has no platform versions, so its script "
+            "approval cannot be recorded."
+        )
     approved_at = datetime.now(timezone.utc)
 
     for platform_version in chapter.platform_versions:

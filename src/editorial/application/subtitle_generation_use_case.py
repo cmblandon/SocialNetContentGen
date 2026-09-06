@@ -50,10 +50,13 @@ class SubtitleGenerationUseCase:
         if language not in ("es", "en"):
             raise StoryGenerationError(f"Unsupported language: {language}")
 
-        cached = self._get_cached_subtitles(script, language)
-        if cached:
-            return cached
-
+        # Deliberately not cached. Timing is derived from audio_duration_ms,
+        # which changes every time narration is re-synthesized, so a cached
+        # draft keyed on (script, language) would hand back timing measured
+        # against different audio — captions silently out of sync with speech,
+        # which is the failure measuring the audio existed to prevent. The
+        # computation here is pure and cheap; the expensive part is the LLM
+        # translation, and that is what _translate_script caches.
         # Split script into sentences for subtitle lines
         sentences = self._split_into_sentences(script)
         if not sentences:
@@ -88,9 +91,7 @@ class SubtitleGenerationUseCase:
                 )
             )
 
-        draft = SubtitleDraft(language=language, subtitle_lines=subtitle_lines)
-        self._cache_subtitles(script, language, draft)
-        return draft
+        return SubtitleDraft(language=language, subtitle_lines=subtitle_lines)
 
     def translate_and_generate_subtitles(
         self, script: str, source_language: str, target_language: str, audio_duration_ms: int
@@ -107,17 +108,8 @@ class SubtitleGenerationUseCase:
         Returns:
             SubtitleDraft with translated subtitle lines
         """
-        if source_language == target_language:
-            return self.generate_subtitles(script, source_language, audio_duration_ms)
-
-        cached = self._get_cached_subtitles(script, target_language)
-        if cached:
-            return cached
-
-        translated_script = self._translate_script(script, source_language, target_language)
-        draft = self.generate_subtitles(translated_script, target_language, audio_duration_ms)
-        self._cache_subtitles(script, target_language, draft)
-        return draft
+        translated_script = self.translate_script(script, source_language, target_language)
+        return self.generate_subtitles(translated_script, target_language, audio_duration_ms)
 
     def translate_script(self, script: str, source_language: str, target_language: str) -> str:
         """
@@ -138,7 +130,16 @@ class SubtitleGenerationUseCase:
         return [s for s in sentences if s.strip()]
 
     def _translate_script(self, script: str, source_lang: str, target_lang: str) -> str:
-        """Translate script from source to target language using LLM."""
+        """
+        Translate script from source to target language using the LLM.
+
+        Cached on disk: this is the only expensive step here, and a
+        translation of a fixed script is stable, unlike subtitle timing.
+        """
+        cached = self._get_cached_translation(script, source_lang, target_lang)
+        if cached is not None:
+            return cached
+
         lang_names = {"es": "Spanish", "en": "English"}
         prompt = f"""\
 Translate the following {lang_names[source_lang]} script to {lang_names[target_lang]}. \
@@ -151,57 +152,48 @@ Keep it concise and maintain the pacing cues. Return ONLY the translated text, n
             raise StoryGenerationError(
                 f"Translation failed: LLM returned empty response for {source_lang} → {target_lang}"
             )
-        return translated.strip()
 
-    def _get_cache_key(self, script: str, language: str) -> str:
-        """Generate a cache key from script and language."""
-        content = f"{script}:{language}"
-        return hashlib.md5(content.encode()).hexdigest()
+        translated = translated.strip()
+        self._cache_translation(script, source_lang, target_lang, translated)
+        return translated
 
-    def _get_cached_subtitles(self, script: str, language: str) -> Optional[SubtitleDraft]:
-        """Retrieve cached subtitles if they exist."""
-        cache_key = self._get_cache_key(script, language)
-        cache_file = self._cache_dir / f"{cache_key}.json"
+    def _translation_cache_path(self, script: str, source_lang: str, target_lang: str) -> Path:
+        key = hashlib.md5(f"{script}:{source_lang}:{target_lang}".encode()).hexdigest()
+        return self._cache_dir / f"{key}.translation.json"
 
-        if not cache_file.exists():
+    def _get_cached_translation(
+        self, script: str, source_lang: str, target_lang: str
+    ) -> Optional[str]:
+        path = self._translation_cache_path(script, source_lang, target_lang)
+        if not path.exists():
             return None
 
         try:
-            with open(cache_file) as f:
-                data = json.load(f)
-            lines = [
-                SubtitleLine(
-                    index=line["index"],
-                    start_time=line["start_time"],
-                    end_time=line["end_time"],
-                    text=line["text"],
-                )
-                for line in data["subtitle_lines"]
-            ]
-            return SubtitleDraft(language=data["language"], subtitle_lines=lines)
-        except Exception as e:
-            raise StoryGenerationError(f"Failed to load cached subtitles: {e}") from e
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            # A damaged cache entry is not worth failing a generation over —
+            # the translation can simply be redone.
+            return None
 
-    def _cache_subtitles(self, script: str, language: str, draft: SubtitleDraft) -> None:
-        """Cache generated subtitles for future reuse."""
-        cache_key = self._get_cache_key(script, language)
-        cache_file = self._cache_dir / f"{cache_key}.json"
+        translated = payload.get("translated")
+        return translated if isinstance(translated, str) and translated.strip() else None
 
-        data = {
-            "language": draft.language,
-            "subtitle_lines": [
-                {
-                    "index": line.index,
-                    "start_time": line.start_time,
-                    "end_time": line.end_time,
-                    "text": line.text,
-                }
-                for line in draft.subtitle_lines
-            ],
-        }
-
+    def _cache_translation(
+        self, script: str, source_lang: str, target_lang: str, translated: str
+    ) -> None:
+        path = self._translation_cache_path(script, source_lang, target_lang)
         try:
-            with open(cache_file, "w") as f:
-                json.dump(data, f)
-        except Exception as e:
-            raise StoryGenerationError(f"Failed to cache subtitles: {e}") from e
+            path.write_text(
+                json.dumps(
+                    {
+                        "source_language": source_lang,
+                        "target_language": target_lang,
+                        "translated": translated,
+                    }
+                ),
+                encoding="utf-8",
+            )
+        except OSError:
+            # Caching is an optimization; failing to write it must not fail
+            # the generation that produced a perfectly good translation.
+            pass

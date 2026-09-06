@@ -174,6 +174,35 @@ def test_update_rejects_missing_script_text(client, test_engine):
     assert response.status_code == 422
 
 
+def test_approve_rejects_a_chapter_with_no_platform_versions(client, test_engine):
+    """
+    Regression: approval is stored on the platform versions, so a chapter
+    without any had nowhere to record it — the endpoint reported
+    script_approved=true while the gate kept reporting false.
+    """
+    with Session(test_engine) as session:
+        document = Document(
+            title="Orphan", agency="AARO", doc_type="report", extracted_text="x"
+        )
+        story = Story(document=document, summary="s")
+        chapter = Chapter(
+            story=story,
+            chapter_index=1,
+            title="No platforms",
+            script=CHAPTER_SCRIPT,
+            visual_notes="v",
+            source_citation="c",
+        )
+        session.add_all([document, story, chapter])
+        session.commit()
+        chapter_id = chapter.id
+
+    response = client.post(f"/chapters/{chapter_id}/script/approve")
+
+    assert response.status_code == 409
+    assert "no platform versions" in response.json()["detail"].lower()
+
+
 def test_approve_unknown_chapter_returns_404(client):
     response = client.post("/chapters/no-such-id/script/approve")
     assert response.status_code == 404

@@ -165,61 +165,89 @@ def test_translation_from_spanish_to_english():
         assert "Hello world" in draft.subtitle_lines[0].text
 
 
-def test_caches_generated_subtitles():
-    """Test that subtitles are cached and retrieved from cache."""
+def test_timing_is_never_cached_across_different_audio_durations():
+    """
+    Regression: a draft cache keyed on (script, language) returned timing
+    measured against different audio, silently desyncing captions from speech
+    — the exact failure that measuring the audio exists to prevent.
+    """
     with tempfile.TemporaryDirectory() as tmpdir:
-        llm = FakeLLMClient()
+        use_case = SubtitleGenerationUseCase(FakeLLMClient(), cache_dir=Path(tmpdir))
+        script = "Una frase. Otra frase."
+
+        first = use_case.generate_subtitles(script, "es", audio_duration_ms=4000)
+        second = use_case.generate_subtitles(script, "es", audio_duration_ms=10000)
+
+        assert first.subtitle_lines[-1].end_time == "00:00:04,000"
+        assert second.subtitle_lines[-1].end_time == "00:00:10,000"
+
+
+def test_translation_is_cached_so_the_llm_is_called_once():
+    """The LLM call is the expensive step, and a fixed script's translation
+    is stable — unlike its timing."""
+    llm = FakeLLMClient({"Hola mundo.": "Hello world."})
+    with tempfile.TemporaryDirectory() as tmpdir:
         use_case = SubtitleGenerationUseCase(llm, cache_dir=Path(tmpdir))
 
-        script = "First. Second."
+        use_case.translate_and_generate_subtitles(
+            "Hola mundo.", "es", "en", audio_duration_ms=2000
+        )
+        use_case.translate_and_generate_subtitles(
+            "Hola mundo.", "es", "en", audio_duration_ms=9000
+        )
 
-        # Generate subtitles (should not call LLM)
-        draft1 = use_case.generate_subtitles(script, "en", audio_duration_ms=2000)
-        assert len(draft1.subtitle_lines) == 2
+        assert llm.call_count == 1
 
-        # Generate same script again (should use cache)
-        draft2 = use_case.generate_subtitles(script, "en", audio_duration_ms=2000)
-        assert draft2.subtitle_lines[0].text == draft1.subtitle_lines[0].text
 
-        # Verify cache file exists
-        cache_files = list(Path(tmpdir).glob("*.json"))
+def test_cached_translation_does_not_freeze_timing():
+    """Reusing a cached translation must still re-time against the new audio."""
+    llm = FakeLLMClient({"Hola mundo.": "Hello world."})
+    with tempfile.TemporaryDirectory() as tmpdir:
+        use_case = SubtitleGenerationUseCase(llm, cache_dir=Path(tmpdir))
+
+        first = use_case.translate_and_generate_subtitles(
+            "Hola mundo.", "es", "en", audio_duration_ms=2000
+        )
+        second = use_case.translate_and_generate_subtitles(
+            "Hola mundo.", "es", "en", audio_duration_ms=9000
+        )
+
+        assert first.subtitle_lines[-1].end_time == "00:00:02,000"
+        assert second.subtitle_lines[-1].end_time == "00:00:09,000"
+
+
+def test_translation_cache_is_written_as_valid_json():
+    llm = FakeLLMClient({"Hola mundo.": "Hello world."})
+    with tempfile.TemporaryDirectory() as tmpdir:
+        use_case = SubtitleGenerationUseCase(llm, cache_dir=Path(tmpdir))
+        use_case.translate_script("Hola mundo.", "es", "en")
+
+        cache_files = list(Path(tmpdir).glob("*.translation.json"))
         assert len(cache_files) == 1
 
+        payload = json.loads(cache_files[0].read_text(encoding="utf-8"))
+        assert payload["translated"] == "Hello world."
+        assert payload["source_language"] == "es"
+        assert payload["target_language"] == "en"
 
-def test_cache_format_is_valid_json():
-    """Test that cached data is valid JSON."""
+
+def test_corrupt_translation_cache_falls_back_to_retranslating():
+    llm = FakeLLMClient({"Hola mundo.": "Hello world."})
     with tempfile.TemporaryDirectory() as tmpdir:
-        use_case = SubtitleGenerationUseCase(FakeLLMClient(), cache_dir=Path(tmpdir))
+        use_case = SubtitleGenerationUseCase(llm, cache_dir=Path(tmpdir))
+        use_case.translate_script("Hola mundo.", "es", "en")
+        list(Path(tmpdir).glob("*.translation.json"))[0].write_text("{not json")
 
-        script = "Test. Sentence."
-        draft = use_case.generate_subtitles(script, "en", audio_duration_ms=2000)
-
-        # Check cache file content
-        cache_files = list(Path(tmpdir).glob("*.json"))
-        assert len(cache_files) == 1
-
-        with open(cache_files[0]) as f:
-            cached_data = json.load(f)
-
-        assert cached_data["language"] == "en"
-        assert len(cached_data["subtitle_lines"]) == 2
-        assert cached_data["subtitle_lines"][0]["text"] == "Test."
+        assert use_case.translate_script("Hola mundo.", "es", "en") == "Hello world."
+        assert llm.call_count == 2
 
 
-def test_same_script_different_languages_cached_separately():
-    """Test that same script in different languages are cached separately."""
+def test_translations_are_cached_per_language_pair():
+    llm = FakeLLMClient({"Hola.": "Hello."})
     with tempfile.TemporaryDirectory() as tmpdir:
-        use_case = SubtitleGenerationUseCase(FakeLLMClient(), cache_dir=Path(tmpdir))
+        use_case = SubtitleGenerationUseCase(llm, cache_dir=Path(tmpdir))
 
-        script = "Hello. World."
+        use_case.translate_script("Hola.", "es", "en")
+        use_case.translate_script("Hola.", "en", "es")
 
-        draft_en = use_case.generate_subtitles(script, "en", audio_duration_ms=2000)
-        draft_es = use_case.generate_subtitles(script, "es", audio_duration_ms=2000)
-
-        # Both should have same content (no translation happened)
-        assert draft_en.language == "en"
-        assert draft_es.language == "es"
-
-        # Check that both are cached
-        cache_files = list(Path(tmpdir).glob("*.json"))
-        assert len(cache_files) == 2
+        assert len(list(Path(tmpdir).glob("*.translation.json"))) == 2

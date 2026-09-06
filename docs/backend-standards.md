@@ -131,6 +131,26 @@ collapse these three concerns into one class.
 - **In-memory/temp databases only**: SQLAlchemy tests use
   `sqlite:///:memory:`; Alembic migration tests use a `tmp_path`-scoped
   file. Never point a test at `data/knowledge_base/*.sqlite`.
+- **No test writes anywhere under `data/`**, not just databases. Clients
+  and stores that take a directory (`SubtitleStore`, `UnsplashImageClient`,
+  `SubtitleGenerationUseCase`, `VideoGenerationUseCase`) default to a path
+  under `DATA_DIR` and several `mkdir` it on construction — a
+  default-constructed instance in a test pollutes the working tree, and one
+  failing run has already left dozens of fixture files there. Always pass a
+  `tmp_path`-scoped directory. An autouse fixture in `tests/conftest.py`
+  enforces this.
+- **A skipped test verifies nothing.** Treat an unexpected skip as missing
+  coverage, not as a pass: a `@pytest.mark.skipif` on a missing optional
+  dependency silently hid the only coverage of the Unsplash fallback, while
+  the suite reported green and the feature failed 100% of the time in a
+  fresh environment. Prefer declaring the dependency over skipping. If a
+  skip is genuinely right (platform-specific behavior), give it a comment
+  saying why, and never report a skipped test as passing.
+- **Every new port needs conformance tests** in
+  `tests/unit/test_editorial_ports.py` (design.md Decision 7): one fake that
+  satisfies it, one **partial** implementation that must NOT (a class missing
+  a single method still passes a naive check while breaking at runtime), and
+  the shipped adapter itself.
 
 ## Database Patterns (editorial service)
 

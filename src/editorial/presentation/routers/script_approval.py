@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from src.editorial.application.script_approval import (
     ChapterNotFoundError,
     EmptyScriptError,
+    NoPlatformVersionsError,
     approve_chapter_script,
     list_chapters_with_scripts,
     reject_chapter_script,
@@ -67,6 +68,8 @@ def approve_script(
         outcome = approve_chapter_script(session, chapter_id)
     except ChapterNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except NoPlatformVersionsError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     return ScriptApprovalResponse(**vars(outcome))
 
 

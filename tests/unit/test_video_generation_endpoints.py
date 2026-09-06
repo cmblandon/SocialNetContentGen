@@ -288,6 +288,67 @@ def test_background_failure_marks_row_failed_not_pending(test_engine, tmp_path):
     assert all("tts" in (r.error_message or "") for r in records)
 
 
+def test_generate_refuses_a_duplicate_for_the_same_platform_and_language(
+    client, test_engine
+):
+    """
+    Regression: every attempt for a platform+language resolves to the same
+    output paths, so two live attempts meant two workers writing the same MP4
+    concurrently and paying for the same narration twice.
+    """
+    chapter_id = _seed_chapter(test_engine, script_approved=True)
+    client.post(f"/chapters/{chapter_id}/video/generate", json={"platforms": ["tiktok"]})
+
+    response = client.post(
+        f"/chapters/{chapter_id}/video/generate", json={"platforms": ["tiktok"]}
+    )
+
+    assert response.status_code == 409
+    assert "already has a" in response.json()["detail"]
+    assert len(_records(test_engine)) == 1
+
+
+def test_generate_is_allowed_again_after_a_failure(test_engine, tmp_path):
+    """A failed attempt is not a live one — it must not block a fresh try."""
+    TestSessionLocal = sessionmaker(bind=test_engine)
+    failing = VideoGenerationUseCase(
+        tts_client=FakeTTSClient(error=RuntimeError("boom")),
+        image_client=FakeImageClient(),
+        compositor=FakeCompositor(),
+        subtitle_use_case=SubtitleGenerationUseCase(
+            FakeLLMClient(), cache_dir=tmp_path / "cache"
+        ),
+        subtitle_store=SubtitleStore(
+            subtitle_root=tmp_path / "subtitles", audio_root=tmp_path / "audio"
+        ),
+        video_root=tmp_path / "videos_generated",
+    )
+
+    def override_get_session():
+        session = TestSessionLocal()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_session_factory] = lambda: TestSessionLocal
+    app.dependency_overrides[get_video_generation_use_case] = lambda: failing
+    try:
+        client = TestClient(app)
+        chapter_id = _seed_chapter(test_engine, script_approved=True)
+        client.post(
+            f"/chapters/{chapter_id}/video/generate", json={"platforms": ["tiktok"]}
+        )
+        second = client.post(
+            f"/chapters/{chapter_id}/video/generate", json={"platforms": ["tiktok"]}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert second.status_code == 202
+
+
 def test_run_pending_refuses_a_row_that_already_ran(client, test_engine, use_case):
     """Guards against a duplicate task redoing paid work."""
     chapter_id = _seed_chapter(test_engine, script_approved=True)

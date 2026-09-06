@@ -22,9 +22,20 @@ The system SHALL generate Spanish and English subtitles from an approved script 
 ### Requirement: Subtitle Timing Synchronization
 The system SHALL align subtitle segments with TTS audio timing, ensuring each subtitle appears at the moment its audio is spoken.
 
-#### Scenario: Timing is calculated from TTS duration
+#### Scenario: Timing is calculated from measured TTS duration
 - **WHEN** subtitles are generated
-- **THEN** divide script into sentences or logical segments, estimate duration per segment based on speech rate (~150 words/min = ~2.5s per 6-word segment), and assign start/end times
+- **THEN** the total duration SHALL be measured from the synthesized audio file (via `ffprobe`), never estimated from word count and a speech rate — an estimate drifts against real TTS output, which varies with the voice, punctuation, and pauses, and that drift accumulates across a chapter until captions no longer match speech
+- **AND** if the audio cannot be measured, generation SHALL fail rather than fall back to an estimate, so timing is never built on a number the caller believes was measured
+
+#### Scenario: Segment timing is proportional to segment length
+- **WHEN** the measured duration is divided across segments
+- **THEN** each segment SHALL receive time in proportion to its length, so a short segment does not hold the screen as long as a long one
+- **AND** the final segment SHALL absorb rounding so the captions end exactly with the audio
+
+#### Scenario: Timing is never cached
+- **WHEN** subtitles are regenerated for a script whose audio has been re-synthesized
+- **THEN** timing SHALL be recomputed from the new measured duration
+- **AND** subtitle segments SHALL NOT be served from a cache keyed only on script and language, which would return timing measured against different audio
 
 #### Scenario: Subtitles do not overlap
 - **WHEN** subtitle segments are generated

@@ -22,6 +22,7 @@ from src.editorial.application.script_approval import (
 from src.editorial.application.video_management import file_size_mb
 from src.editorial.application.video_generation_use_case import (
     SUPPORTED_LANGUAGES,
+    GenerationAlreadyExistsError,
     ScriptNotApprovedError,
     VideoGenerationUseCase,
 )
@@ -154,6 +155,11 @@ def generate_video(
                     use_case.create_pending(session, platform_version.id, language)
                 )
             except ScriptNotApprovedError as error:
+                raise HTTPException(status_code=409, detail=str(error)) from error
+            except GenerationAlreadyExistsError as error:
+                # 409 rather than silently skipping: the caller asked for a
+                # video that already exists, and should be told so rather
+                # than shown a success that generated nothing.
                 raise HTTPException(status_code=409, detail=str(error)) from error
 
     responses = [_to_response(record) for record in created]

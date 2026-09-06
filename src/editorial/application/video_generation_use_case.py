@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.editorial.application.subtitle_generation_use_case import SubtitleGenerationUseCase
@@ -39,6 +40,17 @@ DEFAULT_VIDEO_ROOT = Path("data/videos_generated")
 class ScriptNotApprovedError(Exception):
     """Raised when video generation is attempted for a PlatformVersion whose
     script has not been approved (specs/script-approval-workflow)."""
+
+
+class GenerationAlreadyExistsError(Exception):
+    """Raised when a generation is requested for a (platform version,
+    language) that already has one pending or generated.
+
+    Every attempt for a given platform and language resolves to the same
+    output paths, so two live attempts would have two workers writing the
+    same MP4 concurrently — interleaved writes producing a corrupt file — and
+    would pay for the same narration twice. Retrying a failed attempt is the
+    supported way to produce a new one."""
 
 
 @dataclass
@@ -116,6 +128,7 @@ class VideoGenerationUseCase:
         """
         self._require_supported_language(language)
         platform_version = self._load_approved_platform_version(session, platform_version_id)
+        self._require_no_live_generation(session, platform_version_id, language)
 
         video_generation = VideoGeneration(
             platform_version=platform_version,
@@ -125,6 +138,30 @@ class VideoGenerationUseCase:
         session.add(video_generation)
         session.commit()
         return video_generation
+
+    @staticmethod
+    def _require_no_live_generation(
+        session: Session, platform_version_id: str, language: str
+    ) -> None:
+        existing = session.execute(
+            select(VideoGeneration)
+            .where(
+                VideoGeneration.platform_version_id == platform_version_id,
+                VideoGeneration.language == language,
+                VideoGeneration.deleted_at.is_(None),
+                VideoGeneration.status.in_(
+                    (VideoGenerationStatus.PENDING, VideoGenerationStatus.GENERATED)
+                ),
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+
+        if existing is not None:
+            raise GenerationAlreadyExistsError(
+                f"PlatformVersion {platform_version_id} already has a "
+                f"'{existing.status.value}' video in '{language}' "
+                f"(VideoGeneration {existing.id})."
+            )
 
     def run_pending(self, session: Session, video_generation_id: str) -> VideoGenerationResult:
         """
