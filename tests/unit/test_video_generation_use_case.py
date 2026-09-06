@@ -29,6 +29,8 @@ from src.editorial.infrastructure.persistence.models import (
     VideoGeneration,
     VideoGenerationStatus,
 )
+from src.editorial.core.entities import SubtitleDraft, SubtitleLine
+from src.editorial.infrastructure.persistence.subtitle_store import SubtitleStore
 
 CHAPTER_SCRIPT = "Primera frase del guion. Segunda frase del guion."
 VISUAL_NOTES = "archival footage of military radar"
@@ -70,6 +72,38 @@ def _make_platform_version(session, *, script_approved: bool) -> PlatformVersion
     session.add_all([document, story, chapter, platform_version])
     session.commit()
     return platform_version
+
+
+def _make_chapter_with_all_platforms(session) -> list[str]:
+    """A chapter with all four platform versions, script approved."""
+    document = Document(
+        title="AARO 2024 Annual Report",
+        agency="AARO",
+        doc_type="report",
+        extracted_text="Full text.",
+    )
+    story = Story(document=document, summary="A radar contact goes unexplained.")
+    chapter = Chapter(
+        story=story,
+        chapter_index=1,
+        title="Part 1",
+        script=CHAPTER_SCRIPT,
+        visual_notes=VISUAL_NOTES,
+        source_citation=SOURCE_CITATION,
+    )
+    session.add_all([document, story, chapter])
+    for platform in PlatformName:
+        session.add(
+            PlatformVersion(
+                chapter=chapter,
+                platform=platform,
+                content="{}",
+                status=ApprovalStatus.PENDING_REVIEW,
+                script_approved=True,
+            )
+        )
+    session.commit()
+    return [pv.id for pv in chapter.platform_versions]
 
 
 class FakeTTSClient:
@@ -143,7 +177,15 @@ class FakeLLMClient:
         return "First script sentence. Second script sentence."
 
 
-def _build_use_case(tmp_path, *, tts=None, images=None, compositor=None):
+def _subtitle_store(tmp_path) -> SubtitleStore:
+    """Always tmp-scoped: a default-constructed store writes into the real
+    data/ directory."""
+    return SubtitleStore(
+        subtitle_root=tmp_path / "subtitles", audio_root=tmp_path / "audio"
+    )
+
+
+def _build_use_case(tmp_path, *, tts=None, images=None, compositor=None, store=None):
     subtitle_use_case = SubtitleGenerationUseCase(
         FakeLLMClient(), cache_dir=tmp_path / "subtitle_cache"
     )
@@ -152,6 +194,7 @@ def _build_use_case(tmp_path, *, tts=None, images=None, compositor=None):
         image_client=images or FakeImageClient(),
         compositor=compositor or FakeCompositor(),
         subtitle_use_case=subtitle_use_case,
+        subtitle_store=store or _subtitle_store(tmp_path),
         video_root=tmp_path / "videos_generated",
     )
 
@@ -319,7 +362,9 @@ def test_retry_reuses_cached_audio_and_visuals(session, tmp_path):
     assert len(tts.calls) == 1, "TTS should have been reused, not re-requested"
     assert len(images.search_queries) == 1, "image should have been reused"
     # The reused audio's duration is measured off the file, not re-estimated.
-    assert tts.measured == [str(tmp_path / "videos_generated" / "tiktok" / "es" / f"{platform_version.chapter_id}.mp3")]
+    assert tts.measured == [
+        str(tmp_path / "audio" / platform_version.chapter_id / "es.mp3")
+    ]
 
 
 def test_retry_reports_failure_when_cached_audio_cannot_be_measured(session, tmp_path):
@@ -364,6 +409,62 @@ def test_retry_refuses_a_generation_that_did_not_fail(session, tmp_path):
 
     with pytest.raises(ValueError, match="only failed generations"):
         use_case.retry_video_generation(session, succeeded.video_generation_id)
+
+
+def test_composition_uses_edited_subtitles_instead_of_regenerating(session, tmp_path):
+    """specs/subtitle-generation-and-approval: an editor's corrections must
+    reach the video, so an existing track is reused, never regenerated."""
+    platform_version = _make_platform_version(session, script_approved=True)
+    store = _subtitle_store(tmp_path)
+    edited = SubtitleDraft(
+        language="es",
+        subtitle_lines=[
+            SubtitleLine(1, "00:00:00,000", "00:00:04,000", "TEXTO CORREGIDO A MANO")
+        ],
+    )
+    store.write(platform_version.chapter_id, edited, edited=True)
+
+    use_case = _build_use_case(tmp_path, store=store)
+    result = use_case.generate_video(session, platform_version.id, "es")
+
+    assert result.succeeded
+    burned_in = Path(result.subtitle_file_path).read_text(encoding="utf-8")
+    assert "TEXTO CORREGIDO A MANO" in burned_in
+    # The canonical track is untouched by the run.
+    assert store.read(platform_version.chapter_id, "es").edited is True
+
+
+def test_composition_writes_subtitles_to_the_per_platform_path(session, tmp_path):
+    """The spec's per-platform SRT location is still populated, as a copy."""
+    platform_version = _make_platform_version(session, script_approved=True)
+    use_case = _build_use_case(tmp_path)
+
+    result = use_case.generate_video(session, platform_version.id, "es")
+
+    expected = (
+        tmp_path
+        / "videos_generated"
+        / "tiktok"
+        / "es"
+        / f"{platform_version.chapter_id}.srt"
+    )
+    assert Path(result.subtitle_file_path) == expected
+    assert expected.exists()
+
+
+def test_audio_is_shared_across_platforms_of_the_same_chapter(session, tmp_path):
+    """One narration synthesis serves every platform video for a chapter."""
+    tts = FakeTTSClient()
+    use_case = _build_use_case(tmp_path, tts=tts)
+
+    platform_version_ids = _make_chapter_with_all_platforms(session)
+    assert len(platform_version_ids) == 4
+
+    for platform_version_id in platform_version_ids:
+        result = use_case.generate_video(session, platform_version_id, "es")
+        assert result.succeeded
+
+    assert len(tts.calls) == 1, "narration should be synthesized once, not per platform"
 
 
 def test_raises_for_unknown_platform_version(session, tmp_path):

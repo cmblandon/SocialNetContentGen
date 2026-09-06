@@ -61,11 +61,11 @@
 
 ## 8. Backend API: Subtitle Endpoints
 
-- [ ] 8.1 Create `/chapters/{id}/subtitles/generate` POST endpoint (generate ES + EN subtitles)
-- [ ] 8.2 Create `/chapters/{id}/subtitles` GET endpoint (retrieve generated subtitles)
-- [ ] 8.3 Create `/chapters/{id}/subtitles/update` POST endpoint (editor edits subtitle text)
-- [ ] 8.4 Add validation to reject generation if script not approved
-- [ ] 8.5 Add unit tests for subtitle endpoints
+- [x] 8.1 Create `/chapters/{id}/subtitles/generate` POST endpoint (generate ES + EN subtitles)
+- [x] 8.2 Create `/chapters/{id}/subtitles` GET endpoint (retrieve generated subtitles)
+- [x] 8.3 Create `/chapters/{id}/subtitles/update` POST endpoint (editor edits subtitle text)
+- [x] 8.4 Add validation to reject generation if script not approved
+- [x] 8.5 Add unit tests for subtitle endpoints
 
 ## 9. Backend API: Video Generation Endpoints
 

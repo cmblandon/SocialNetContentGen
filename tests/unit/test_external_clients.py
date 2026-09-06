@@ -133,9 +133,10 @@ class TestUnsplashImageClient:
 
     def test_search_returns_none_without_api_key(self):
         """Test that search returns None when API key is missing."""
-        client = UnsplashImageClient(access_key=None)
-        result = client.search_image("test query")
-        assert result is None
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = UnsplashImageClient(access_key=None, cache_dir=Path(tmpdir))
+            result = client.search_image("test query")
+            assert result is None
 
     def test_caches_search_result(self):
         """Test that search results are cached."""

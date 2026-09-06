@@ -93,3 +93,43 @@ class SubtitleDraft:
             return ""
         blocks = [line.to_srt_block() for line in self.subtitle_lines]
         return "\n\n".join(blocks)
+
+    @classmethod
+    def from_srt(cls, srt_text: str, language: str) -> "SubtitleDraft":
+        """
+        Parse an SRT file back into subtitle lines.
+
+        Needed because a stored SRT is the source of truth once an editor has
+        touched it: re-reading it (rather than regenerating) is what lets an
+        edit survive into the composited video.
+
+        Raises ValueError on a block that is not well-formed, so a corrupt
+        file surfaces instead of silently yielding partial subtitles.
+        """
+        lines: list[SubtitleLine] = []
+        for block in [b for b in srt_text.strip().split("\n\n") if b.strip()]:
+            rows = block.strip().split("\n")
+            if len(rows) < 3:
+                raise ValueError(f"Malformed SRT block (expected 3+ rows): {block!r}")
+
+            try:
+                index = int(rows[0].strip())
+            except ValueError as error:
+                raise ValueError(f"Malformed SRT index in block: {block!r}") from error
+
+            timecode = rows[1]
+            if "-->" not in timecode:
+                raise ValueError(f"Malformed SRT timecode in block: {block!r}")
+            start_time, _, end_time = timecode.partition("-->")
+
+            lines.append(
+                SubtitleLine(
+                    index=index,
+                    start_time=start_time.strip(),
+                    end_time=end_time.strip(),
+                    # Multi-row captions keep their internal line breaks.
+                    text="\n".join(rows[2:]).strip(),
+                )
+            )
+
+        return cls(language=language, subtitle_lines=lines)

@@ -28,6 +28,7 @@ from src.editorial.infrastructure.persistence.models import (
     VideoGeneration,
     VideoGenerationStatus,
 )
+from src.editorial.infrastructure.persistence.subtitle_store import SubtitleStore
 
 # Chapters are authored in Spanish; any other language is a translation.
 SOURCE_LANGUAGE = "es"
@@ -57,17 +58,27 @@ class VideoGenerationResult:
 
 @dataclass
 class _Workspace:
-    """The deterministic per-(chapter, language) file paths a run reads and
-    writes. Shared by first attempts and retries so retries can reuse
-    whatever the failed attempt already produced."""
+    """
+    The deterministic file paths a run reads and writes.
+
+    Audio and the canonical subtitle track are keyed by (chapter, language)
+    only — they derive from the chapter's script, not from the platform — so
+    all four of a chapter's platform videos share one synthesis and one
+    editable caption file. Only the visual and the MP4 are per-platform, plus
+    the per-platform SRT copy the spec names, which composition writes from
+    the canonical track.
+    """
 
     audio_path: Path
+    canonical_subtitle_path: Path
     visual_path: Path
     subtitle_path: Path
     video_path: Path
 
     def ensure_directory(self) -> None:
         self.video_path.parent.mkdir(parents=True, exist_ok=True)
+        self.audio_path.parent.mkdir(parents=True, exist_ok=True)
+        self.canonical_subtitle_path.parent.mkdir(parents=True, exist_ok=True)
 
 
 class VideoGenerationUseCase:
@@ -77,12 +88,14 @@ class VideoGenerationUseCase:
         image_client: IImageClient,
         compositor: IVideoCompositor,
         subtitle_use_case: SubtitleGenerationUseCase,
+        subtitle_store: Optional[SubtitleStore] = None,
         video_root: Optional[Path] = None,
     ):
         self._tts_client = tts_client
         self._image_client = image_client
         self._compositor = compositor
         self._subtitle_use_case = subtitle_use_case
+        self._subtitle_store = subtitle_store or SubtitleStore()
         self._video_root = video_root or DEFAULT_VIDEO_ROOT
 
     def generate_video(
@@ -160,7 +173,9 @@ class VideoGenerationUseCase:
             narration = self._resolve_narration(chapter.script, language)
             audio_duration_ms = self._produce_audio(narration, language, workspace)
             self._produce_visual(chapter.visual_notes, chapter.source_citation, workspace)
-            self._produce_subtitles(chapter.script, language, audio_duration_ms, workspace)
+            self._produce_subtitles(
+                chapter.id, chapter.script, language, audio_duration_ms, workspace
+            )
             self._compose(workspace, audio_duration_ms)
         except Exception as error:
             return self._record_failure(session, video_generation, error)
@@ -221,16 +236,34 @@ class VideoGenerationUseCase:
             raise _StepError("visuals", error) from error
 
     def _produce_subtitles(
-        self, script: str, language: str, audio_duration_ms: int, workspace: _Workspace
+        self,
+        chapter_id: str,
+        script: str,
+        language: str,
+        audio_duration_ms: int,
+        workspace: _Workspace,
     ) -> None:
+        """
+        Resolve the caption track, then copy it to the path the compositor
+        burns in.
+
+        An existing canonical track is reused rather than regenerated. That is
+        what makes "edited subtitles are used in video composition"
+        (specs/subtitle-generation-and-approval) true: regenerating here would
+        silently discard an editor's corrections on every run.
+        """
         try:
-            draft = self._subtitle_use_case.translate_and_generate_subtitles(
-                script=script,
-                source_language=SOURCE_LANGUAGE,
-                target_language=language,
-                audio_duration_ms=audio_duration_ms,
-            )
-            workspace.subtitle_path.write_text(draft.to_srt(), encoding="utf-8")
+            stored = self._subtitle_store.read(chapter_id, language)
+            if stored is None:
+                draft = self._subtitle_use_case.translate_and_generate_subtitles(
+                    script=script,
+                    source_language=SOURCE_LANGUAGE,
+                    target_language=language,
+                    audio_duration_ms=audio_duration_ms,
+                )
+                stored = self._subtitle_store.write(chapter_id, draft, edited=False)
+
+            workspace.subtitle_path.write_text(stored.draft.to_srt(), encoding="utf-8")
         except Exception as error:
             raise _StepError("subtitles", error) from error
 
@@ -249,7 +282,8 @@ class VideoGenerationUseCase:
     def _build_workspace(self, platform: str, language: str, chapter_id: str) -> _Workspace:
         directory = self._video_root / platform / language
         return _Workspace(
-            audio_path=directory / f"{chapter_id}.mp3",
+            audio_path=self._subtitle_store.audio_path(chapter_id, language),
+            canonical_subtitle_path=self._subtitle_store.subtitle_path(chapter_id, language),
             visual_path=directory / f"{chapter_id}.jpg",
             subtitle_path=directory / f"{chapter_id}.srt",
             video_path=directory / f"{chapter_id}.mp4",

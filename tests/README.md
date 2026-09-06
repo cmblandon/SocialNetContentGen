@@ -22,8 +22,20 @@ of the project (see `docs/backend-standards.md`):
   - **Editorial service** (`src/editorial`):
     - `test_editorial_models.py`: SQLAlchemy models — fields, relationships, cascade deletes, the approval-status lifecycle.
     - `test_editorial_migrations.py`: Alembic migration creates and reverts the schema cleanly.
-    - `test_editorial_ports.py`: Structural (`isinstance`) conformance for `ISourceScraper`/`ISocialPublisher`/`ILLMClient`.
+    - `test_editorial_ports.py`: Structural (`isinstance`) conformance for `ISourceScraper`/`ISocialPublisher`/`ILLMClient`/`ITextToSpeechClient`/`IImageClient`/`IVideoCompositor`, for both fakes and the shipped adapters.
     - `test_editorial_app.py`: FastAPI route tests (starts with `/health`; grows per phase — see `openspec/changes/archivo-desclasificado-pipeline/tasks.md`).
+  - **Video generation** (`video-generation-pipeline` OpenSpec change):
+    - `test_subtitle_generation_use_case.py`: SRT rendering, ES/EN translation, caching, and length-weighted segment timing.
+    - `test_subtitle_store.py`: Canonical subtitle storage and SRT round-tripping.
+    - `test_audio_duration.py`: ffprobe duration measurement, including a real-audio round trip.
+    - `test_external_clients.py`: ElevenLabs TTS and Unsplash image clients (APIs mocked).
+    - `test_ffmpeg_compositor.py`: FFmpeg command construction and failure handling.
+    - `test_video_generation_use_case.py`: Generation orchestration — approval gate, per-step failure recording, retry reuse.
+    - `test_script_approval_endpoints.py`: Script review endpoints and the approval-reset-on-edit rule.
+    - `test_subtitle_endpoints.py`: Subtitle generate/read/edit endpoints and timing preservation.
+
+  Tests that touch generated media must scope `SubtitleStore`/`UnsplashImageClient`
+  paths to `tmp_path`; default-constructed clients write under the real `data/` tree.
 
 - `tests/conftest.py`: Shared pytest fixtures and mock implementations of core ports.
 
