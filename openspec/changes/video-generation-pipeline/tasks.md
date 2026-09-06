@@ -4,7 +4,9 @@
 - [x] 1.2 Create Alembic migration for new `VideoGeneration` table (id, platform_version_id, language, video_file_path, subtitle_file_path, status, error_message, retry_of_id, created_at, generated_at)
 - [x] 1.3 Add `script_approved` and `script_approved_at` fields to `PlatformVersion` SQLAlchemy model
 - [x] 1.4 Create `VideoGeneration` SQLAlchemy model and add relationship to `PlatformVersion`
-- [x] 1.5 Run migrations locally and verify schema
+- [x] 1.5 Create Alembic migration for `VideoGeneration.deleted_at` (soft delete — `retry_of_id` is a self-referential FK with no cascade, so a hard delete would break the retry lineage the audit trail requires)
+- [x] 1.6 Add `deleted_at` field to `VideoGeneration` SQLAlchemy model and exclude soft-deleted rows from listings
+- [x] 1.7 Run migrations locally and verify schema
 
 ## 2. Backend Core: Story Writing Optimization
 
@@ -78,11 +80,11 @@
 
 ## 10. Backend API: Video Management Endpoints
 
-- [ ] 10.1 Create `/videos?status=generated` GET endpoint (list all generated videos with metadata)
-- [ ] 10.2 Create `/videos/{id}` DELETE endpoint (delete video file and metadata)
-- [ ] 10.3 Create `/videos/stats` GET endpoint (total storage, count by status, largest videos)
-- [ ] 10.4 Create `/chapters/{id}/audit` GET endpoint (audit trail of video generation attempts)
-- [ ] 10.5 Add unit tests for video management endpoints
+- [x] 10.1 Create `/videos?status=generated` GET endpoint (list all generated videos with metadata)
+- [x] 10.2 Create `/videos/{id}` DELETE endpoint (delete video file and metadata)
+- [x] 10.3 Create `/videos/stats` GET endpoint (total storage, count by status, largest videos)
+- [x] 10.4 Create `/chapters/{id}/audit` GET endpoint (audit trail of video generation attempts)
+- [x] 10.5 Add unit tests for video management endpoints
 
 ## 11. Frontend: Script Approval View
 

@@ -253,5 +253,13 @@ class VideoGeneration(Base):
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     generated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Soft delete: the row outlives its file. retry_of_id is a self-referential
+    # FK with no cascade, so removing an attempt that has retries would break
+    # the lineage the audit trail reports.
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     platform_version: Mapped["PlatformVersion"] = relationship(back_populates="video_generations")
+
+    @property
+    def is_deleted(self) -> bool:
+        return self.deleted_at is not None

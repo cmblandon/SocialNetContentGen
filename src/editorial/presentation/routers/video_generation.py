@@ -8,7 +8,6 @@ a task queue (Celery/RQ) as operational overhead for an editorial workflow, so
 the background runs in-process — meaning a server restart mid-composition
 leaves rows PENDING, which the retry endpoint exists to clear up.
 """
-import os
 from datetime import datetime
 from typing import Optional
 
@@ -20,6 +19,7 @@ from src.editorial.application.script_approval import (
     ChapterNotFoundError,
     is_script_approved,
 )
+from src.editorial.application.video_management import file_size_mb
 from src.editorial.application.video_generation_use_case import (
     SUPPORTED_LANGUAGES,
     ScriptNotApprovedError,
@@ -87,19 +87,8 @@ def _to_response(record: VideoGeneration) -> VideoGenerationResponse:
         retry_of_id=record.retry_of_id,
         created_at=record.created_at,
         generated_at=record.generated_at,
-        size_mb=_size_mb(record.video_file_path),
+        size_mb=file_size_mb(record.video_file_path),
     )
-
-
-def _size_mb(path: Optional[str]) -> Optional[float]:
-    """None rather than 0 when the file is gone: a caller must be able to tell
-    'not generated yet' from 'generated and empty'."""
-    if not path:
-        return None
-    try:
-        return round(os.path.getsize(path) / (1024 * 1024), 3)
-    except OSError:
-        return None
 
 
 def run_generation_in_background(
@@ -179,11 +168,13 @@ def generate_video(
 def get_videos(
     chapter_id: str, session: Session = Depends(get_session)
 ) -> list[VideoGenerationResponse]:
+    """Soft-deleted attempts are excluded here; GET /chapters/{id}/audit keeps them."""
     chapter = _require_chapter(session, chapter_id)
     return [
         _to_response(record)
         for platform_version in chapter.platform_versions
         for record in platform_version.video_generations
+        if record.deleted_at is None
     ]
 
 
@@ -207,7 +198,8 @@ def retry_video(
         record
         for platform_version in chapter.platform_versions
         for record in platform_version.video_generations
-        if record.status == VideoGenerationStatus.FAILED
+        # A deleted attempt is retired, not pending work to pick back up.
+        if record.status == VideoGenerationStatus.FAILED and record.deleted_at is None
     ]
     if request.video_generation_id is not None:
         failed = [r for r in failed if r.id == request.video_generation_id]
