@@ -97,6 +97,12 @@ def list_all_videos(
     ),
     session: Session = Depends(get_session),
 ) -> list[VideoListItemResponse]:
+    """
+    Every generated video, newest first, excluding deleted ones.
+
+    Only `status` filters server-side; platform, language and date are the
+    caller's to apply.
+    """
     return [
         VideoListItemResponse(**vars(item)) for item in list_videos(session, status)
     ]
@@ -112,6 +118,13 @@ def video_stats(
     session: Session = Depends(get_session),
     video_root: Path = Depends(get_video_root),
 ) -> VideoStatsResponse:
+    """
+    Storage usage, counts by status, largest videos, and disk capacity.
+
+    Counts come from the database and sizes from disk, so `missing_on_disk`
+    reports rows marked generated whose file has vanished. Disk capacity is
+    null, never 0, when it cannot be read.
+    """
     stats = get_storage_stats(
         session, largest_limit=largest_limit, video_root=video_root
     )
@@ -152,6 +165,14 @@ def download_video_file(
 def delete_one_video(
     video_id: str, session: Session = Depends(get_session)
 ) -> VideoDeletionResponse:
+    """
+    Delete a video's files and mark the record deleted.
+
+    Soft delete: the row is retained so the retry lineage the audit trail
+    reports stays intact. Shared narration and canonical subtitles are never
+    removed, and a per-platform file is kept when another live record still
+    points at it — the response says which and why.
+    """
     try:
         outcome = delete_video(session, video_id)
     except VideoGenerationNotFoundError as error:
@@ -163,6 +184,12 @@ def delete_one_video(
 def chapter_audit_trail(
     chapter_id: str, session: Session = Depends(get_session)
 ) -> list[AuditEntryResponse]:
+    """
+    Every generation attempt for a chapter, oldest first.
+
+    Includes deleted attempts and retry lineage. `triggered_by` is always
+    null: this service has no authentication, so no caller identity exists.
+    """
     try:
         entries = get_chapter_audit_trail(session, chapter_id)
     except ChapterNotFoundError as error:

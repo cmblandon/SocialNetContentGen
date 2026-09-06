@@ -135,11 +135,11 @@
 
 ## 16. Documentation & Deployment
 
-- [ ] 16.1 Update README.md: add "Video Generation" section with setup steps (FFmpeg install, ElevenLabs/Unsplash API keys in .env)
-- [ ] 16.2 Update OpenSpec change summary: add implementation notes for future reference
-- [ ] 16.3 Add ADR (Architecture Decision Record) documenting FFmpeg, Unsplash, and subtitle choices
-- [ ] 16.4 Document API endpoints in OpenAPI/Swagger (if applicable)
-- [ ] 16.5 Write user guide for editors: "How to Approve Scripts and Generate Videos"
+- [x] 16.1 Update README.md: add "Video Generation" section with setup steps (FFmpeg install, ElevenLabs/Unsplash API keys in .env)
+- [x] 16.2 Update OpenSpec change summary: add implementation notes for future reference
+- [x] 16.3 Add ADR (Architecture Decision Record) documenting FFmpeg, Unsplash, and subtitle choices
+- [x] 16.4 Document API endpoints in OpenAPI/Swagger (if applicable)
+- [x] 16.5 Write user guide for editors: "How to Approve Scripts and Generate Videos"
 - [ ] 16.6 Tag release version and merge to main
 
 ## 17. Monitoring & Fallback

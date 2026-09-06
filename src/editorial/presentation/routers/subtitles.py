@@ -77,6 +77,13 @@ def generate_subtitles(
     session: Session = Depends(get_session),
     use_case: SubtitleReviewUseCase = Depends(get_subtitle_review_use_case),
 ) -> list[SubtitleTrackResponse]:
+    """
+    Generate Spanish and English subtitle tracks.
+
+    Timing is measured from the synthesized narration, not estimated. Returns
+    409 unless the script is approved. Already-generated tracks are returned
+    untouched, so calling twice cannot discard an editor's corrections.
+    """
     try:
         tracks = use_case.generate(session, chapter_id)
     except ChapterNotFoundError as error:
@@ -92,6 +99,7 @@ def get_subtitles(
     session: Session = Depends(get_session),
     use_case: SubtitleReviewUseCase = Depends(get_subtitle_review_use_case),
 ) -> list[SubtitleTrackResponse]:
+    """Stored subtitle tracks; an empty list before generation."""
     try:
         tracks = use_case.get(session, chapter_id)
     except ChapterNotFoundError as error:
@@ -108,6 +116,13 @@ def update_subtitles(
     session: Session = Depends(get_session),
     use_case: SubtitleReviewUseCase = Depends(get_subtitle_review_use_case),
 ) -> SubtitleTrackResponse:
+    """
+    Replace segment text, preserving timing.
+
+    Segments are matched by index and the count must equal the stored
+    track's, so timing cannot drift from the audio it was measured against.
+    A mismatch or blank text is a 422.
+    """
     try:
         track = use_case.update(
             session,

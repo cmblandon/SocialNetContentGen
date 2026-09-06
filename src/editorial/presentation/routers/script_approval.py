@@ -54,6 +54,13 @@ class ChapterScriptResponse(BaseModel):
 def list_pending_scripts(
     session: Session = Depends(get_session),
 ) -> list[ChapterScriptResponse]:
+    """
+    Chapters awaiting or holding script approval.
+
+    Includes already-approved chapters so an editor can see and revisit a
+    decision; a chapter drops out only once every platform version reaches a
+    terminal state.
+    """
     return [
         ChapterScriptResponse(**vars(summary))
         for summary in list_chapters_with_scripts(session)
@@ -64,6 +71,13 @@ def list_pending_scripts(
 def approve_script(
     chapter_id: str, session: Session = Depends(get_session)
 ) -> ScriptApprovalResponse:
+    """
+    Approve a chapter's script, unblocking subtitle and video generation.
+
+    Writes the decision to every platform version of the chapter, since they
+    share one script. Returns 409 for a chapter with no platform versions —
+    there would be nowhere to record the approval.
+    """
     try:
         outcome = approve_chapter_script(session, chapter_id)
     except ChapterNotFoundError as error:
@@ -77,6 +91,7 @@ def approve_script(
 def reject_script(
     chapter_id: str, session: Session = Depends(get_session)
 ) -> ScriptApprovalResponse:
+    """Withdraw approval, returning the chapter to the review queue."""
     try:
         outcome = reject_chapter_script(session, chapter_id)
     except ChapterNotFoundError as error:
@@ -90,6 +105,13 @@ def update_script(
     request: ScriptUpdateRequest,
     session: Session = Depends(get_session),
 ) -> ScriptApprovalResponse:
+    """
+    Replace the script text.
+
+    Always resets approval, including when the chapter is already approved:
+    the narrated text must be text a human read. Blank text is rejected with
+    422, since an empty script would produce a silent video.
+    """
     try:
         outcome = update_chapter_script(session, chapter_id, request.script_text)
     except ChapterNotFoundError as error:

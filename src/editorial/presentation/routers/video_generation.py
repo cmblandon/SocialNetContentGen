@@ -129,6 +129,15 @@ def generate_video(
     use_case: VideoGenerationUseCase = Depends(get_video_generation_use_case),
     session_factory: sessionmaker = Depends(get_session_factory),
 ) -> list[VideoGenerationResponse]:
+    """
+    Start generating videos; returns 202 immediately with pending rows.
+
+    Composition runs in the background — poll GET /chapters/{id}/video for
+    status. Defaults to every platform of the chapter in Spanish only;
+    generating both languages doubles narration cost. Returns 409 when the
+    script is unapproved or a pending/generated video already exists for that
+    platform and language.
+    """
     request = request or VideoGenerateRequest()
     chapter = _require_chapter(session, chapter_id)
 
@@ -197,6 +206,12 @@ def retry_video(
     use_case: VideoGenerationUseCase = Depends(get_video_generation_use_case),
     session_factory: sessionmaker = Depends(get_session_factory),
 ) -> list[VideoGenerationResponse]:
+    """
+    Retry failed generations, reusing audio and visuals already on disk.
+
+    Retries every failed attempt for the chapter, or one when
+    video_generation_id is given. Returns 409 when nothing has failed.
+    """
     request = request or VideoRetryRequest()
     chapter = _require_chapter(session, chapter_id)
 

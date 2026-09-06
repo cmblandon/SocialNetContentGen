@@ -1,57 +1,1643 @@
-openapi: 3.0.0
+# GENERATED FILE — do not edit by hand.
+# Regenerate with: python -m scripts.export_openapi
+# Source of truth is src/editorial/presentation/app.py; endpoint descriptions
+# come from each route function's docstring.
+openapi: 3.1.0
 info:
-  title: Archivo Desclasificado — Editorial Service API
-  description: |
-    REST API for the editorial service defined in the archivo-desclasificado-pipeline
-    OpenSpec change (openspec/changes/archivo-desclasificado-pipeline/). It sits on top
-    of the local ingestion pipeline ("Proyecto Expediente") and exposes the
-    human-approval gate, research trigger, publish records, and covered-cases
-    management described in that change's specs/.
-
-    Only the endpoints actually implemented so far are listed below. Do not add a path
-    here until its implementing task in tasks.md is done — this file must always match
-    what src/editorial/presentation/app.py actually serves, not what's merely planned.
-    Planned-but-not-yet-implemented endpoints (for reference while building):
-      - POST /cycles/{id}/approve, POST /cycles/{id}/reject   (Phase 3)
-      - POST /research/run                                     (Phase 4)
-      - GET /publish-records                                   (Phase 5)
-      - GET /cases, PATCH /cases/{id}                           (Phase 6)
+  title: Archivo Desclasificado — Editorial Service
   version: 0.1.0
-  contact:
-    name: Archivo Desclasificado
-  license:
-    name: UNLICENSED
-
-servers:
-  - url: http://localhost:8000
-    description: Local development server
-
 paths:
-  /health:
-    get:
-      summary: Health check
-      description: Confirms the editorial FastAPI service is up.
+  /platform-versions/{platform_version_id}/approve:
+    post:
       tags:
-        - System
+      - approval
+      summary: Approve
+      operationId: approve_platform_versions__platform_version_id__approve_post
+      parameters:
+      - name: platform_version_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Platform Version Id
       responses:
         '200':
-          description: Service is healthy
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HealthResponse'
+                type: object
+                additionalProperties: true
+                title: Response Approve Platform Versions  Platform Version Id  Approve
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /platform-versions/{platform_version_id}/publish:
+    post:
+      tags:
+      - approval
+      summary: Publish
+      operationId: publish_platform_versions__platform_version_id__publish_post
+      parameters:
+      - name: platform_version_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Platform Version Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Publish Platform Versions  Platform Version Id  Publish
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /platform-versions/{platform_version_id}/reject:
+    post:
+      tags:
+      - approval
+      summary: Reject
+      operationId: reject_platform_versions__platform_version_id__reject_post
+      parameters:
+      - name: platform_version_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Platform Version Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Reject Platform Versions  Platform Version Id  Reject
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /research/run:
+    post:
+      tags:
+      - research
+      summary: Run Research
+      operationId: run_research_research_run_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResearchRunRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResearchRunResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /research/resume:
+    post:
+      tags:
+      - research
+      summary: Resume Research
+      operationId: resume_research_research_resume_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResearchRunResponse'
+  /research/checkpoints/summary:
+    get:
+      tags:
+      - research
+      summary: Get Checkpoints Summary
+      operationId: get_checkpoints_summary_research_checkpoints_summary_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckpointSummaryResponse'
+  /research/sources:
+    get:
+      tags:
+      - research
+      summary: List Sources
+      operationId: list_sources_research_sources_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceUrlsResponse'
+    post:
+      tags:
+      - research
+      summary: Add Source
+      operationId: add_source_research_sources_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourceUrlRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceUrlsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /research/sources/delete:
+    post:
+      tags:
+      - research
+      summary: Remove Source
+      operationId: remove_source_research_sources_delete_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourceUrlRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceUrlsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /publish-records:
+    get:
+      tags:
+      - publish-records
+      summary: List Publish Records
+      operationId: list_publish_records_publish_records_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/PublishRecordResponse'
+                type: array
+                title: Response List Publish Records Publish Records Get
+  /chapters/pending:
+    get:
+      tags:
+      - chapters
+      summary: List Pending Chapters
+      operationId: list_pending_chapters_chapters_pending_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/PendingChapterResponse'
+                type: array
+                title: Response List Pending Chapters Chapters Pending Get
+  /cases:
+    get:
+      tags:
+      - cases
+      summary: List Cases
+      operationId: list_cases_cases_get
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Q
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CaseResponse'
+                title: Response List Cases Cases Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /cases/{case_id}:
+    patch:
+      tags:
+      - cases
+      summary: Update Case
+      operationId: update_case_cases__case_id__patch
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Case Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCaseRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /chapters/pending/scripts:
+    get:
+      tags:
+      - script-approval
+      summary: List Pending Scripts
+      description: 'Chapters awaiting or holding script approval.
 
+
+        Includes already-approved chapters so an editor can see and revisit a
+
+        decision; a chapter drops out only once every platform version reaches a
+
+        terminal state.'
+      operationId: list_pending_scripts_chapters_pending_scripts_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ChapterScriptResponse'
+                type: array
+                title: Response List Pending Scripts Chapters Pending Scripts Get
+  /chapters/{chapter_id}/script/approve:
+    post:
+      tags:
+      - script-approval
+      summary: Approve Script
+      description: 'Approve a chapter''s script, unblocking subtitle and video generation.
+
+
+        Writes the decision to every platform version of the chapter, since they
+
+        share one script. Returns 409 for a chapter with no platform versions —
+
+        there would be nowhere to record the approval.'
+      operationId: approve_script_chapters__chapter_id__script_approve_post
+      parameters:
+      - name: chapter_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Chapter Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScriptApprovalResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /chapters/{chapter_id}/script/reject:
+    post:
+      tags:
+      - script-approval
+      summary: Reject Script
+      description: Withdraw approval, returning the chapter to the review queue.
+      operationId: reject_script_chapters__chapter_id__script_reject_post
+      parameters:
+      - name: chapter_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Chapter Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScriptApprovalResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /chapters/{chapter_id}/script/update:
+    post:
+      tags:
+      - script-approval
+      summary: Update Script
+      description: 'Replace the script text.
+
+
+        Always resets approval, including when the chapter is already approved:
+
+        the narrated text must be text a human read. Blank text is rejected with
+
+        422, since an empty script would produce a silent video.'
+      operationId: update_script_chapters__chapter_id__script_update_post
+      parameters:
+      - name: chapter_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Chapter Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScriptUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScriptApprovalResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /chapters/{chapter_id}/subtitles/generate:
+    post:
+      tags:
+      - subtitles
+      summary: Generate Subtitles
+      description: 'Generate Spanish and English subtitle tracks.
+
+
+        Timing is measured from the synthesized narration, not estimated. Returns
+
+        409 unless the script is approved. Already-generated tracks are returned
+
+        untouched, so calling twice cannot discard an editor''s corrections.'
+      operationId: generate_subtitles_chapters__chapter_id__subtitles_generate_post
+      parameters:
+      - name: chapter_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Chapter Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SubtitleTrackResponse'
+                title: Response Generate Subtitles Chapters  Chapter Id  Subtitles
+                  Generate Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /chapters/{chapter_id}/subtitles:
+    get:
+      tags:
+      - subtitles
+      summary: Get Subtitles
+      description: Stored subtitle tracks; an empty list before generation.
+      operationId: get_subtitles_chapters__chapter_id__subtitles_get
+      parameters:
+      - name: chapter_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Chapter Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SubtitleTrackResponse'
+                title: Response Get Subtitles Chapters  Chapter Id  Subtitles Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /chapters/{chapter_id}/subtitles/update:
+    post:
+      tags:
+      - subtitles
+      summary: Update Subtitles
+      description: 'Replace segment text, preserving timing.
+
+
+        Segments are matched by index and the count must equal the stored
+
+        track''s, so timing cannot drift from the audio it was measured against.
+
+        A mismatch or blank text is a 422.'
+      operationId: update_subtitles_chapters__chapter_id__subtitles_update_post
+      parameters:
+      - name: chapter_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Chapter Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubtitleUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubtitleTrackResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /chapters/{chapter_id}/video/generate:
+    post:
+      tags:
+      - video-generation
+      summary: Generate Video
+      description: 'Start generating videos; returns 202 immediately with pending
+        rows.
+
+
+        Composition runs in the background — poll GET /chapters/{id}/video for
+
+        status. Defaults to every platform of the chapter in Spanish only;
+
+        generating both languages doubles narration cost. Returns 409 when the
+
+        script is unapproved or a pending/generated video already exists for that
+
+        platform and language.'
+      operationId: generate_video_chapters__chapter_id__video_generate_post
+      parameters:
+      - name: chapter_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Chapter Id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/VideoGenerateRequest'
+              - type: 'null'
+              title: Request
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VideoGenerationResponse'
+                title: Response Generate Video Chapters  Chapter Id  Video Generate
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /chapters/{chapter_id}/video:
+    get:
+      tags:
+      - video-generation
+      summary: Get Videos
+      description: Soft-deleted attempts are excluded here; GET /chapters/{id}/audit
+        keeps them.
+      operationId: get_videos_chapters__chapter_id__video_get
+      parameters:
+      - name: chapter_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Chapter Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VideoGenerationResponse'
+                title: Response Get Videos Chapters  Chapter Id  Video Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /chapters/{chapter_id}/video/retry:
+    post:
+      tags:
+      - video-generation
+      summary: Retry Video
+      description: 'Retry failed generations, reusing audio and visuals already on
+        disk.
+
+
+        Retries every failed attempt for the chapter, or one when
+
+        video_generation_id is given. Returns 409 when nothing has failed.'
+      operationId: retry_video_chapters__chapter_id__video_retry_post
+      parameters:
+      - name: chapter_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Chapter Id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/VideoRetryRequest'
+              - type: 'null'
+              title: Request
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VideoGenerationResponse'
+                title: Response Retry Video Chapters  Chapter Id  Video Retry Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /videos:
+    get:
+      tags:
+      - video-management
+      summary: List All Videos
+      description: 'Every generated video, newest first, excluding deleted ones.
+
+
+        Only `status` filters server-side; platform, language and date are the
+
+        caller''s to apply.'
+      operationId: list_all_videos_videos_get
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/VideoGenerationStatus'
+          - type: 'null'
+          description: Filter by generation status.
+          title: Status
+        description: Filter by generation status.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VideoListItemResponse'
+                title: Response List All Videos Videos Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /videos/stats:
+    get:
+      tags:
+      - video-management
+      summary: Video Stats
+      description: 'Storage usage, counts by status, largest videos, and disk capacity.
+
+
+        Counts come from the database and sizes from disk, so `missing_on_disk`
+
+        reports rows marked generated whose file has vanished. Disk capacity is
+
+        null, never 0, when it cannot be read.'
+      operationId: video_stats_videos_stats_get
+      parameters:
+      - name: largest_limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 10
+          title: Largest Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoStatsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /videos/{video_id}/file:
+    get:
+      tags:
+      - video-management
+      summary: Download Video File
+      description: 'Serve the MP4 itself.
+
+
+        The admin panel cannot play `video_file_path` directly — it is a path on
+
+        the server''s filesystem, not a URL. Starlette''s FileResponse honours
+
+        Range requests, so the player can seek without pulling the whole file.'
+      operationId: download_video_file_videos__video_id__file_get
+      parameters:
+      - name: video_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Video Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /videos/{video_id}:
+    delete:
+      tags:
+      - video-management
+      summary: Delete One Video
+      description: 'Delete a video''s files and mark the record deleted.
+
+
+        Soft delete: the row is retained so the retry lineage the audit trail
+
+        reports stays intact. Shared narration and canonical subtitles are never
+
+        removed, and a per-platform file is kept when another live record still
+
+        points at it — the response says which and why.'
+      operationId: delete_one_video_videos__video_id__delete
+      parameters:
+      - name: video_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Video Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoDeletionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /chapters/{chapter_id}/audit:
+    get:
+      tags:
+      - video-management
+      summary: Chapter Audit Trail
+      description: 'Every generation attempt for a chapter, oldest first.
+
+
+        Includes deleted attempts and retry lineage. `triggered_by` is always
+
+        null: this service has no authentication, so no caller identity exists.'
+      operationId: chapter_audit_trail_chapters__chapter_id__audit_get
+      parameters:
+      - name: chapter_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Chapter Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditEntryResponse'
+                title: Response Chapter Audit Trail Chapters  Chapter Id  Audit Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /health:
+    get:
+      summary: Health Check
+      operationId: health_check_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Health Check Health Get
 components:
   schemas:
-    HealthResponse:
-      type: object
+    AuditEntryResponse:
       properties:
+        video_generation_id:
+          type: string
+          title: Video Generation Id
+        platform:
+          type: string
+          title: Platform
+        language:
+          type: string
+          title: Language
         status:
           type: string
-          example: "ok"
+          title: Status
+        triggered_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Triggered By
+        triggered_at:
+          type: string
+          format: date-time
+          title: Triggered At
+        completed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Completed At
+        deleted_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Deleted At
+        retry_of_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Retry Of Id
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+      type: object
       required:
-        - status
-
-tags:
-  - name: System
-    description: Service-level operational endpoints
+      - video_generation_id
+      - platform
+      - language
+      - status
+      - triggered_by
+      - triggered_at
+      - completed_at
+      - deleted_at
+      - retry_of_id
+      - error_message
+      title: AuditEntryResponse
+    CaseResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        date:
+          type: string
+          title: Date
+        identifier:
+          type: string
+          title: Identifier
+        outcome:
+          type: string
+          title: Outcome
+        reason:
+          type: string
+          title: Reason
+      type: object
+      required:
+      - id
+      - date
+      - identifier
+      - outcome
+      - reason
+      title: CaseResponse
+    ChapterScriptResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        title:
+          type: string
+          title: Title
+        script:
+          type: string
+          title: Script
+        visual_notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Visual Notes
+        source_citation:
+          type: string
+          title: Source Citation
+        script_approved:
+          type: boolean
+          title: Script Approved
+        script_approved_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Script Approved At
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        word_count:
+          type: integer
+          title: Word Count
+      type: object
+      required:
+      - id
+      - title
+      - script
+      - visual_notes
+      - source_citation
+      - script_approved
+      - script_approved_at
+      - created_at
+      - word_count
+      title: ChapterScriptResponse
+    CheckpointSummaryResponse:
+      properties:
+        pending:
+          type: integer
+          title: Pending
+        failed:
+          type: integer
+          title: Failed
+      type: object
+      required:
+      - pending
+      - failed
+      title: CheckpointSummaryResponse
+    DocumentSummary:
+      properties:
+        id:
+          type: string
+          title: Id
+        title:
+          type: string
+          title: Title
+        agency:
+          type: string
+          title: Agency
+        doc_type:
+          type: string
+          title: Doc Type
+        published_date:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Published Date
+        source_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Url
+      type: object
+      required:
+      - id
+      - title
+      - agency
+      - doc_type
+      - published_date
+      - source_url
+      title: DocumentSummary
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    LargestVideoResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        chapter_id:
+          type: string
+          title: Chapter Id
+        platform:
+          type: string
+          title: Platform
+        language:
+          type: string
+          title: Language
+        size_mb:
+          type: number
+          title: Size Mb
+        video_file_path:
+          type: string
+          title: Video File Path
+      type: object
+      required:
+      - id
+      - chapter_id
+      - platform
+      - language
+      - size_mb
+      - video_file_path
+      title: LargestVideoResponse
+    PendingChapterResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        title:
+          type: string
+          title: Title
+        script:
+          type: string
+          title: Script
+        visual_notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Visual Notes
+        source_citation:
+          type: string
+          title: Source Citation
+        story_summary:
+          type: string
+          title: Story Summary
+        document:
+          $ref: '#/components/schemas/DocumentSummary'
+        platform_versions:
+          items:
+            $ref: '#/components/schemas/PlatformVersionSummary'
+          type: array
+          title: Platform Versions
+      type: object
+      required:
+      - id
+      - title
+      - script
+      - visual_notes
+      - source_citation
+      - story_summary
+      - document
+      - platform_versions
+      title: PendingChapterResponse
+    PlatformVersionSummary:
+      properties:
+        id:
+          type: string
+          title: Id
+        platform:
+          type: string
+          title: Platform
+        content:
+          type: string
+          title: Content
+        status:
+          type: string
+          title: Status
+      type: object
+      required:
+      - id
+      - platform
+      - content
+      - status
+      title: PlatformVersionSummary
+    PublishRecordResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        platform_version_id:
+          type: string
+          title: Platform Version Id
+        platform:
+          type: string
+          title: Platform
+        status:
+          type: string
+          title: Status
+        external_post_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: External Post Id
+        scheduled_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Scheduled At
+        published_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Published At
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+      type: object
+      required:
+      - id
+      - platform_version_id
+      - platform
+      - status
+      - external_post_id
+      - scheduled_at
+      - published_at
+      - error_message
+      title: PublishRecordResponse
+    ResearchRunRequest:
+      properties:
+        source_urls:
+          items:
+            type: string
+          type: array
+          minItems: 1
+          title: Source Urls
+        query:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Query
+      type: object
+      required:
+      - source_urls
+      title: ResearchRunRequest
+    ResearchRunResponse:
+      properties:
+        documents_reviewed:
+          type: integer
+          title: Documents Reviewed
+        stories_created:
+          type: integer
+          title: Stories Created
+        chapters_generated:
+          type: integer
+          title: Chapters Generated
+        pending_approval_platform_version_ids:
+          items:
+            type: string
+          type: array
+          title: Pending Approval Platform Version Ids
+        discarded_document_ids:
+          items:
+            type: string
+          type: array
+          title: Discarded Document Ids
+      type: object
+      required:
+      - documents_reviewed
+      - stories_created
+      - chapters_generated
+      - pending_approval_platform_version_ids
+      - discarded_document_ids
+      title: ResearchRunResponse
+    ScriptApprovalResponse:
+      properties:
+        chapter_id:
+          type: string
+          title: Chapter Id
+        script_approved:
+          type: boolean
+          title: Script Approved
+        script_approved_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Script Approved At
+        platform_versions_updated:
+          type: integer
+          title: Platform Versions Updated
+      type: object
+      required:
+      - chapter_id
+      - script_approved
+      - script_approved_at
+      - platform_versions_updated
+      title: ScriptApprovalResponse
+    ScriptUpdateRequest:
+      properties:
+        script_text:
+          type: string
+          minLength: 1
+          title: Script Text
+          description: Replacement script text
+      type: object
+      required:
+      - script_text
+      title: ScriptUpdateRequest
+    SourceUrlRequest:
+      properties:
+        url:
+          type: string
+          title: Url
+      type: object
+      required:
+      - url
+      title: SourceUrlRequest
+    SourceUrlsResponse:
+      properties:
+        source_urls:
+          items:
+            type: string
+          type: array
+          title: Source Urls
+      type: object
+      required:
+      - source_urls
+      title: SourceUrlsResponse
+    SubtitleSegmentEditRequest:
+      properties:
+        index:
+          type: integer
+          title: Index
+        text:
+          type: string
+          minLength: 1
+          title: Text
+      type: object
+      required:
+      - index
+      - text
+      title: SubtitleSegmentEditRequest
+    SubtitleSegmentResponse:
+      properties:
+        index:
+          type: integer
+          title: Index
+        start:
+          type: string
+          title: Start
+        end:
+          type: string
+          title: End
+        text:
+          type: string
+          title: Text
+      type: object
+      required:
+      - index
+      - start
+      - end
+      - text
+      title: SubtitleSegmentResponse
+    SubtitleTrackResponse:
+      properties:
+        lang:
+          type: string
+          title: Lang
+        edited:
+          type: boolean
+          title: Edited
+        updated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Updated At
+        segments:
+          items:
+            $ref: '#/components/schemas/SubtitleSegmentResponse'
+          type: array
+          title: Segments
+      type: object
+      required:
+      - lang
+      - edited
+      - updated_at
+      - segments
+      title: SubtitleTrackResponse
+    SubtitleUpdateRequest:
+      properties:
+        lang:
+          type: string
+          title: Lang
+        segments:
+          items:
+            $ref: '#/components/schemas/SubtitleSegmentEditRequest'
+          type: array
+          minItems: 1
+          title: Segments
+      type: object
+      required:
+      - lang
+      - segments
+      title: SubtitleUpdateRequest
+    UpdateCaseRequest:
+      properties:
+        reason:
+          type: string
+          title: Reason
+      type: object
+      required:
+      - reason
+      title: UpdateCaseRequest
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    VideoDeletionResponse:
+      properties:
+        video_generation_id:
+          type: string
+          title: Video Generation Id
+        video_file_deleted:
+          type: boolean
+          title: Video File Deleted
+        subtitle_file_deleted:
+          type: boolean
+          title: Subtitle File Deleted
+        video_file_retained_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Video File Retained Reason
+        subtitle_file_retained_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Subtitle File Retained Reason
+      type: object
+      required:
+      - video_generation_id
+      - video_file_deleted
+      - subtitle_file_deleted
+      - video_file_retained_reason
+      - subtitle_file_retained_reason
+      title: VideoDeletionResponse
+    VideoGenerateRequest:
+      properties:
+        platforms:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Platforms
+          description: Platform names; defaults to all of the chapter's.
+        languages:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Languages
+          description: Language codes; defaults to Spanish only.
+      type: object
+      title: VideoGenerateRequest
+    VideoGenerationResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        platform_version_id:
+          type: string
+          title: Platform Version Id
+        platform:
+          type: string
+          title: Platform
+        language:
+          type: string
+          title: Language
+        status:
+          type: string
+          title: Status
+        video_file_path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Video File Path
+        subtitle_file_path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Subtitle File Path
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+        retry_of_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Retry Of Id
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        generated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Generated At
+        size_mb:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Size Mb
+      type: object
+      required:
+      - id
+      - platform_version_id
+      - platform
+      - language
+      - status
+      - video_file_path
+      - subtitle_file_path
+      - error_message
+      - retry_of_id
+      - created_at
+      - generated_at
+      - size_mb
+      title: VideoGenerationResponse
+    VideoGenerationStatus:
+      type: string
+      enum:
+      - pending
+      - generated
+      - failed
+      title: VideoGenerationStatus
+      description: Lifecycle of a VideoGeneration record.
+    VideoListItemResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        chapter_id:
+          type: string
+          title: Chapter Id
+        chapter_title:
+          type: string
+          title: Chapter Title
+        platform_version_id:
+          type: string
+          title: Platform Version Id
+        platform:
+          type: string
+          title: Platform
+        language:
+          type: string
+          title: Language
+        status:
+          type: string
+          title: Status
+        video_file_path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Video File Path
+        subtitle_file_path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Subtitle File Path
+        size_mb:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Size Mb
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+        retry_of_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Retry Of Id
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        generated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Generated At
+      type: object
+      required:
+      - id
+      - chapter_id
+      - chapter_title
+      - platform_version_id
+      - platform
+      - language
+      - status
+      - video_file_path
+      - subtitle_file_path
+      - size_mb
+      - error_message
+      - retry_of_id
+      - created_at
+      - generated_at
+      title: VideoListItemResponse
+    VideoRetryRequest:
+      properties:
+        video_generation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Video Generation Id
+          description: Retry one attempt; defaults to every failed one.
+      type: object
+      title: VideoRetryRequest
+    VideoStatsResponse:
+      properties:
+        total_storage_mb:
+          type: number
+          title: Total Storage Mb
+        count_by_status:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Count By Status
+        largest_videos:
+          items:
+            $ref: '#/components/schemas/LargestVideoResponse'
+          type: array
+          title: Largest Videos
+        missing_on_disk:
+          type: integer
+          title: Missing On Disk
+        disk_free_mb:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Disk Free Mb
+        disk_total_mb:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Disk Total Mb
+      type: object
+      required:
+      - total_storage_mb
+      - count_by_status
+      - largest_videos
+      - missing_on_disk
+      - disk_free_mb
+      - disk_total_mb
+      title: VideoStatsResponse
+servers:
+- url: http://localhost:8000
+  description: Local development server
