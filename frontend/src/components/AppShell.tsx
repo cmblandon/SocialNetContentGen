@@ -6,6 +6,8 @@ import type { ReactNode } from "react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Pipeline" },
+  { href: "/scripts", label: "Guiones" },
+  { href: "/videos", label: "Videos" },
   { href: "/calendar", label: "Calendario" },
   { href: "/cases", label: "Casos cubiertos" },
   { href: "/settings", label: "Configuración" },

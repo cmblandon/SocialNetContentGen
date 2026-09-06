@@ -91,12 +91,12 @@
 
 ## 11. Frontend: Script Approval View
 
-- [ ] 11.1 Create `ScriptReviewCard` component (display script, visual directives, source citation)
-- [ ] 11.2 Add approve/reject/edit buttons to ScriptReviewCard
-- [ ] 11.3 Create `ScriptApprovalView` page (list of pending scripts, search/filter, bulk actions)
-- [ ] 11.4 Implement script edit modal (textarea for script text, with character count and word count feedback)
+- [x] 11.1 Create `ScriptReviewCard` component (display script, visual directives, source citation)
+- [x] 11.2 Add approve/reject/edit buttons to ScriptReviewCard
+- [x] 11.3 Create `ScriptApprovalView` page (list of pending scripts, search/filter, bulk actions)
+- [x] 11.4 Implement script edit modal (textarea for script text, with character count and word count feedback)
 - [ ] 11.5 Integrate `ScriptReviewCard` into Pipeline feed
-- [ ] 11.6 Add loading/error states and toast notifications
+- [x] 11.6 Add loading/error states and toast notifications
 
 ## 12. Frontend: Subtitle Review View
 
