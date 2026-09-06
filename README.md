@@ -309,6 +309,80 @@ retries"). Scheduling reads an `optimal_time:<platform>=HH:MM` line from
 `DEFAULT_PROPOSED_TIME` (`12:00`) as a new line and does **not** publish —
 per spec, publishing immediately without a defined time is not allowed.
 
+### Video generation (`video-generation-pipeline`)
+
+Approved chapter scripts become MP4 reels with narration, a visual, and
+burned-in captions. Three separate editor actions, each its own endpoint —
+nothing auto-chains, so a failure at one stage is retried without redoing the
+others:
+
+1. `POST /chapters/{id}/script/approve` — the gate. Nothing downstream runs
+   until the script is approved, and **editing a script clears its approval**,
+   so the narrated text is always text a human read.
+2. `POST /chapters/{id}/subtitles/generate` — Spanish and English SRT with
+   timing measured from the synthesized audio. Editors correct the text via
+   `POST /chapters/{id}/subtitles/update`; timing is preserved and cannot be
+   changed by an edit.
+3. `POST /chapters/{id}/video/generate` — returns `202` immediately with
+   `pending` rows; composition runs in the background. Poll
+   `GET /chapters/{id}/video` for status, and `POST /chapters/{id}/video/retry`
+   for anything that failed.
+
+#### System requirements
+
+FFmpeg is required, and **`ffprobe` must be on `PATH` too** — it ships with
+FFmpeg and is what measures narration length. Subtitle timing is built on that
+measurement, so a missing `ffprobe` fails generation loudly rather than
+falling back to a words-per-minute estimate that would drift out of sync:
+
+```bash
+# macOS
+brew install ffmpeg
+
+# Debian/Ubuntu
+sudo apt-get install ffmpeg
+
+# Verify both are present
+ffmpeg -version && ffprobe -version
+```
+
+Pillow (in `requirements.txt`) renders the fallback visual. It is not
+optional: the fallback is the path taken whenever Unsplash returns no match,
+which is *every* generation while `UNSPLASH_ACCESS_KEY` is unset.
+
+#### Configuration (`.env`)
+
+```bash
+ELEVENLABS_API_KEY=            # required for narration
+ELEVENLABS_SPANISH_VOICE_ID=   # one fixed voice per language, so the
+ELEVENLABS_ENGLISH_VOICE_ID=   # channel sounds consistent across chapters
+UNSPLASH_ACCESS_KEY=           # optional — without it, search is skipped
+                               # and every video uses the colour+text fallback
+```
+
+#### Where files land
+
+Narration and captions depend on the chapter and language only — never the
+platform — so they are generated **once** and shared by all four of a
+chapter's platform videos. Only the visual and the MP4 are per-platform:
+
+```
+data/audio/{chapter_id}/{lang}.mp3               # synthesized once per language
+data/subtitles/{chapter_id}/{lang}.srt           # canonical, what editors edit
+data/videos_generated/{platform}/{lang}/{chapter_id}.mp4
+data/videos_generated/{platform}/{lang}/{chapter_id}.srt   # copy, burned in
+```
+
+Composition **reuses** an existing canonical SRT rather than regenerating it —
+that is what lets an editor's corrections survive into the video. Retrying a
+failed generation reuses whatever the failed attempt already produced, so a
+composition failure does not pay for narration twice.
+
+Background composition runs in-process (design.md Decision 7 rejected a task
+queue as overhead for this workflow). One consequence worth knowing: a server
+restart mid-composition leaves those rows `pending`, and the retry endpoint is
+how you clear them.
+
 ### Running the editorial API locally
 
 ```bash

@@ -39,7 +39,7 @@
 - [x] 5.4 Implement directory creation for `data/videos_generated/{platform}/{language}/`
 - [x] 5.5 Add video file validation (check file exists, size > 0)
 - [x] 5.6 Add unit tests for FFmpeg compositor (use temp files, verify output format)
-- [ ] 5.7 Verify FFmpeg is installed; add installation docs
+- [x] 5.7 Verify FFmpeg is installed; add installation docs
 
 ## 6. Backend Use Case: Video Generation
 
