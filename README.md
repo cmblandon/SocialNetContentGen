@@ -383,6 +383,63 @@ queue as overhead for this workflow). One consequence worth knowing: a server
 restart mid-composition leaves those rows `pending`, and the retry endpoint is
 how you clear them.
 
+#### What happens when something fails
+
+Each stage degrades differently, on purpose. `GET /videos/metrics` reports
+the success rate and groups failures by the step that broke, and every stage
+logs under the `editorial.*` loggers.
+
+| Stage | Failure | Behaviour |
+|---|---|---|
+| Unsplash | no match, no API key, rate limit, provider down | **Falls back** to a solid-colour card with the directive and citation. Generation continues — the video is always producible. Logged as a warning. |
+| Unsplash | image download fails after a hit | Same fallback. |
+| ElevenLabs | quota exceeded, auth failure, timeout | **Fails the generation**, recorded as `tts step failed: …` on the row. Retry once quota resets; the retry reuses any audio already on disk. |
+| ffprobe | narration cannot be measured | **Fails**, rather than estimating duration — an estimate would desync captions from speech. |
+| FFmpeg | encoder error, timeout, empty output | **Fails**, recorded as `composition step failed: …`. Retry re-runs only FFmpeg, reusing the narration and visual already produced. |
+| Server restart | mid-composition | Row is left `pending` forever; the background task is in-process with no sweeper. The panel stops polling after ~5 min and offers a manual refresh; use **Reintentar** to recover. |
+| Disk | full | Generation fails at the composition step. `/videos/stats` reports free space so the panel can warn first. |
+
+Nothing retries automatically. Every retry is an explicit action, so a
+failing provider cannot be hammered in a loop.
+
+### Running curation on a local model (`local-curation-model`)
+
+Curation runs on every discovered document, most of which are discarded, so
+it is where cloud tokens are least well spent — and it stalls the whole
+pipeline when API credit runs out. It can run against a local Ollama model
+instead:
+
+```bash
+ollama serve                # if not already running
+ollama pull cogito:latest   # 8B, 131k context
+```
+
+```bash
+# .env
+CURATION_LLM_PROVIDER=ollama       # default: anthropic
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=cogito:latest
+OLLAMA_TIMEOUT_SEC=180
+```
+
+**Only curation is affected.** Story-writing, platform-adaptation and
+subtitle translation stay on the cloud model: they generate prose under
+validation (150–220 words, no quotes absent from the source, mandatory visual
+directives, parseable JSON) that a small local model fails often enough to
+cost more in regeneration than it saves.
+
+Expect roughly 20s for a short document and ~95s for a large one (measured on
+an M3 Pro with `cogito:latest`), against a couple of seconds for the cloud
+model. The adapter requests Ollama's JSON output mode, since curation parses
+the response as JSON.
+
+> **Local scoring is more permissive.** In verification, two scraped
+> *homepages* (`Archives.gov Home`, The Black Vault's index) both scored above
+> the advancement threshold. The rubric rewards "provides access to primary
+> sources", which a landing page satisfies without being a document. Watch
+> what advances, and prefer fixing the scraper's source URLs over loosening
+> the rubric.
+
 ### Running the editorial API locally
 
 ```bash

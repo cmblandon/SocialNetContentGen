@@ -129,6 +129,25 @@ def test_non_conforming_object_does_not_satisfy_compositor_protocol():
     assert not isinstance(object(), IVideoCompositor)
 
 
+class PartialLLMClient:
+    """Has no complete() — must NOT satisfy ILLMClient. A curation provider
+    that swaps in a half-implemented client would otherwise fail only at the
+    first real document."""
+
+    def generate(self, prompt: str) -> str:
+        return ""
+
+
+def test_partial_llm_client_does_not_satisfy_protocol():
+    assert not isinstance(PartialLLMClient(), ILLMClient)
+
+
+def test_ollama_adapter_satisfies_the_llm_port():
+    from src.editorial.infrastructure.llm.ollama_llm_client import OllamaLLMClient
+
+    assert isinstance(OllamaLLMClient(), ILLMClient)
+
+
 def test_real_adapters_satisfy_their_ports(tmp_path):
     """The shipped adapters, not just the fakes, conform structurally."""
     from src.editorial.infrastructure.external.elevenlabs_client import (

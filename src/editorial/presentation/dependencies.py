@@ -19,7 +19,9 @@ from src.editorial.infrastructure.external.elevenlabs_client import (
     ElevenLabsTextToSpeechClient,
 )
 from src.editorial.infrastructure.external.unsplash_client import UnsplashImageClient
+from src.editorial.core.ports import ILLMClient
 from src.editorial.infrastructure.llm.anthropic_llm_client import AnthropicLLMClient
+from src.editorial.infrastructure.llm.ollama_llm_client import OllamaLLMClient
 from src.editorial.infrastructure.persistence.project_memory import ProjectMemoryStore
 from src.editorial.infrastructure.persistence.subtitle_store import SubtitleStore
 from src.editorial.infrastructure.publishing.postiz_publisher import (
@@ -41,6 +43,31 @@ def get_memory_store() -> ProjectMemoryStore:
 
 def get_llm_client() -> AnthropicLLMClient:
     return AnthropicLLMClient(api_key=settings.anthropic_api_key)
+
+
+def get_curation_llm_client() -> Iterator[ILLMClient]:
+    """
+    The LLM curation runs on, which may be local.
+
+    Separate from get_llm_client because only curation is eligible: it scores
+    against a rubric and emits a small JSON verdict, which a local 8B model
+    handles. Story-writing and platform-adaptation stay on the cloud model —
+    they generate prose under validation a small model fails often enough to
+    cost more in regeneration than it saves.
+    """
+    if settings.curation_llm_provider != "ollama":
+        yield get_llm_client()
+        return
+
+    client = OllamaLLMClient(
+        base_url=settings.ollama_base_url,
+        model=settings.ollama_model,
+        timeout=float(settings.ollama_timeout_sec),
+    )
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 def get_publisher() -> PostizPublisherAdapter:

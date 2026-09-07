@@ -69,6 +69,17 @@ class Settings(BaseSettings):
     postiz_api_key: str = ""
     postiz_base_url: str = "http://localhost:5000"
 
+    # --- Local curation model (local-curation-model) ---
+    # Curation runs on every discovered document, most of which are
+    # discarded, so it is the stage where cloud tokens are least well spent —
+    # and the stage that stalls the whole pipeline when credit runs out.
+    # Defaults to anthropic, so existing deployments are unchanged until
+    # this is flipped.
+    curation_llm_provider: str = "anthropic"  # "anthropic" | "ollama"
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "cogito:latest"
+    ollama_timeout_sec: int = 180
+
     # --- Video generation (video-generation-pipeline) ---
     # One fixed "Archivo Desclasificado" voice per language, per
     # specs/video-generation-from-script "Consistent voice per language".

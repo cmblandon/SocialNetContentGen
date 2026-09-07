@@ -32,7 +32,12 @@ from src.editorial.infrastructure.scraping.firecrawl_scraper import (
     FirecrawlScraperAdapter,
 )
 from src.editorial.infrastructure.scraping.jina_scraper import JinaScraperAdapter
-from src.editorial.presentation.dependencies import get_llm_client, get_memory_store
+from src.editorial.core.ports import ILLMClient
+from src.editorial.presentation.dependencies import (
+    get_curation_llm_client,
+    get_llm_client,
+    get_memory_store,
+)
 
 router = APIRouter(prefix="/research", tags=["research"])
 
@@ -85,8 +90,10 @@ def get_research_agent(
 
 def get_case_curation(
     memory_store: ProjectMemoryStore = Depends(get_memory_store),
-    llm_client: AnthropicLLMClient = Depends(get_llm_client),
+    llm_client: ILLMClient = Depends(get_curation_llm_client),
 ) -> CaseCurationUseCase:
+    """Curation alone resolves its LLM through the curation-specific provider,
+    which configuration may point at a local model."""
     return CaseCurationUseCase(llm_client=llm_client, memory_store=memory_store)
 
 
