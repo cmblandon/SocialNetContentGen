@@ -12,7 +12,11 @@ import json
 
 import pytest
 
-from src.editorial.application.story_writing_use_case import StoryWritingUseCase
+from src.editorial.application.story_writing_use_case import (
+    MAX_CHAPTER_WORDS,
+    MIN_CHAPTER_WORDS,
+    StoryWritingUseCase,
+)
 from src.editorial.core.entities import ChapterDraft, StoryDraft
 from src.editorial.core.exceptions import StoryGenerationError
 
@@ -300,3 +304,117 @@ def test_prompt_includes_reel_optimization_constraints():
     assert "150–220 words" in llm.last_prompt
     assert "visual directives" in llm.last_prompt
     assert "pacing cues" in llm.last_prompt
+
+
+# --- regeneration on validation failure (local-curation-model, task 6.x) -----
+
+
+class ScriptedLLMClient:
+    """Returns a different response per call, recording the prompts it saw."""
+
+    def __init__(self, *responses: str):
+        self._responses = list(responses)
+        self.prompts: list[str] = []
+
+    def complete(self, prompt: str) -> str:
+        self.prompts.append(prompt)
+        # Repeat the last response once exhausted, so "always fails" is easy
+        # to express.
+        return self._responses[min(len(self.prompts), len(self._responses)) - 1]
+
+
+def _payload(word_count: int) -> str:
+    return json.dumps(
+        {"summary": "s", "chapters": [_chapter(script=_words(word_count))]}
+    )
+
+
+def test_retries_with_the_reason_when_a_chapter_is_too_short():
+    """
+    Measured behaviour that makes local generation viable: a small model
+    produced 121, then 149, then 150 words once told what was wrong.
+    """
+    llm = ScriptedLLMClient(_payload(120), _payload(180))
+    use_case = StoryWritingUseCase(llm_client=llm)
+
+    draft = use_case.write_story(
+        document_text=DOCUMENT_TEXT,
+        agency="AARO",
+        doc_type="report",
+        published_date="2024-03-01",
+        narrative_angle="angle",
+    )
+
+    assert len(draft.chapters[0].script.split()) == 180
+    assert len(llm.prompts) == 2
+    # The retry must say what was wrong, not just ask again.
+    assert "120 words" in llm.prompts[1]
+    assert "rejected" in llm.prompts[1]
+
+
+def test_a_valid_first_attempt_never_retries():
+    """A capable model pays nothing for this — no extra call is made."""
+    llm = ScriptedLLMClient(_payload(180))
+    use_case = StoryWritingUseCase(llm_client=llm)
+
+    use_case.write_story(
+        document_text=DOCUMENT_TEXT,
+        agency="AARO",
+        doc_type="report",
+        published_date="2024-03-01",
+        narrative_angle="angle",
+    )
+
+    assert len(llm.prompts) == 1
+
+
+def test_retries_are_bounded_and_raise_the_last_error():
+    """A model that cannot satisfy the constraint fails visibly, not forever."""
+    llm = ScriptedLLMClient(_payload(30))
+    use_case = StoryWritingUseCase(llm_client=llm, max_attempts=3)
+
+    with pytest.raises(StoryGenerationError, match="30 words"):
+        use_case.write_story(
+            document_text=DOCUMENT_TEXT,
+            agency="AARO",
+            doc_type="report",
+            published_date="2024-03-01",
+            narrative_angle="angle",
+        )
+
+    assert len(llm.prompts) == 3
+
+
+def test_retries_on_unparseable_output_too():
+    """Small models wrap JSON in prose; that is worth one more attempt."""
+    llm = ScriptedLLMClient("Claro, aquí tienes:", _payload(180))
+    use_case = StoryWritingUseCase(llm_client=llm)
+
+    draft = use_case.write_story(
+        document_text=DOCUMENT_TEXT,
+        agency="AARO",
+        doc_type="report",
+        published_date="2024-03-01",
+        narrative_angle="angle",
+    )
+
+    assert draft.chapters
+    assert "not valid JSON" in llm.prompts[1]
+
+
+def test_the_word_range_is_never_relaxed_to_accommodate_a_weak_model():
+    """
+    The range is what keeps a chapter inside a 15-60s reel. Retrying the
+    model is the accommodation; lowering the bar is not.
+    """
+    assert (MIN_CHAPTER_WORDS, MAX_CHAPTER_WORDS) == (150, 220)
+
+    llm = ScriptedLLMClient(_payload(MIN_CHAPTER_WORDS - 1))
+    with pytest.raises(StoryGenerationError):
+        StoryWritingUseCase(llm_client=llm, max_attempts=1).write_story(
+            document_text=DOCUMENT_TEXT,
+            agency="AARO",
+            doc_type="report",
+            published_date="2024-03-01",
+            narrative_angle="angle",
+        )

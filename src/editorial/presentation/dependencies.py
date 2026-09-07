@@ -45,15 +45,16 @@ def get_llm_client() -> AnthropicLLMClient:
     return AnthropicLLMClient(api_key=settings.anthropic_api_key)
 
 
-def get_curation_llm_client() -> Iterator[ILLMClient]:
+def get_document_llm_client() -> Iterator[ILLMClient]:
     """
-    The LLM curation runs on, which may be local.
+    The LLM every document-processing stage runs on — curation,
+    story-writing, and platform-adaptation.
 
-    Separate from get_llm_client because only curation is eligible: it scores
-    against a rubric and emits a small JSON verdict, which a local 8B model
-    handles. Story-writing and platform-adaptation stay on the cloud model —
-    they generate prose under validation a small model fails often enough to
-    cost more in regeneration than it saves.
+    Kept separate from get_llm_client so the provider can be switched for
+    document processing without touching anything else. Local generation is
+    viable because StoryWritingUseCase retries with the validation failure
+    fed back; a small model reaches the word-count range in two or three
+    attempts rather than one.
     """
     if settings.curation_llm_provider != "ollama":
         yield get_llm_client()

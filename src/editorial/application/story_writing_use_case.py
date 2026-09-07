@@ -9,6 +9,7 @@ that fails these checks means the draft cannot be trusted and must be
 regenerated or escalated, never silently passed through.
 """
 import json
+import logging
 import re
 from typing import Optional
 
@@ -16,8 +17,22 @@ from src.editorial.core.entities import ChapterDraft, StoryDraft
 from src.editorial.core.exceptions import StoryGenerationError
 from src.editorial.core.ports import ILLMClient
 
+logger = logging.getLogger("editorial.story_writing")
+
 MIN_CHAPTER_WORDS = 150
 MAX_CHAPTER_WORDS = 220
+
+# Enough for a small model to converge (measured: 121 -> 149 -> 150 words),
+# few enough that a model which simply cannot satisfy the constraint fails
+# quickly rather than burning minutes of local inference.
+DEFAULT_MAX_ATTEMPTS = 3
+
+_RETRY_SUFFIX = """\
+Your previous attempt was rejected: {reason}
+
+Fix exactly that problem and respond again with the same JSON shape. Count \
+the words in each script before answering — a script outside the required \
+range is rejected again. Aim for 185 words per chapter."""
 
 # Phrases that overstate what a source document establishes (per
 # specs/story-writing/spec.md: "no lenguaje sensacionalista que tergiverse
@@ -62,8 +77,9 @@ Respond with JSON matching this shape:
 
 
 class StoryWritingUseCase:
-    def __init__(self, llm_client: ILLMClient):
+    def __init__(self, llm_client: ILLMClient, max_attempts: int = DEFAULT_MAX_ATTEMPTS):
         self._llm_client = llm_client
+        self._max_attempts = max(1, max_attempts)
 
     def write_story(
         self,
@@ -73,6 +89,18 @@ class StoryWritingUseCase:
         published_date: Optional[str],
         narrative_angle: str,
     ) -> StoryDraft:
+        """
+        Generate a story, retrying with the validation failure fed back.
+
+        A small local model cannot satisfy the word-count range from a single
+        instruction — measured output went 121, then 149, then 150 words as
+        the reason was returned to it. Telling the model what was wrong is
+        what makes local generation viable; the requirement itself is never
+        relaxed to accommodate a weaker model.
+
+        A capable model satisfies the constraints on the first attempt and
+        never enters the loop, so this costs cloud callers nothing.
+        """
         prompt = _PROMPT_TEMPLATE.format(
             agency=agency,
             doc_type=doc_type,
@@ -81,14 +109,32 @@ class StoryWritingUseCase:
             document_text=document_text,
         )
 
-        raw_response = self._llm_client.complete(prompt)
-        payload = self._parse_json(raw_response)
+        last_error: Optional[StoryGenerationError] = None
+        for attempt in range(1, self._max_attempts + 1):
+            raw_response = self._llm_client.complete(prompt)
+            try:
+                return self._build_draft(raw_response, document_text)
+            except StoryGenerationError as error:
+                last_error = error
+                logger.info(
+                    "Story draft rejected on attempt %d/%d: %s",
+                    attempt,
+                    self._max_attempts,
+                    error,
+                )
+                prompt = f"{prompt}\n\n{_RETRY_SUFFIX.format(reason=error)}"
 
+        # Bounded: a model that cannot satisfy the constraint fails visibly
+        # rather than looping, and the caller sees the actual reason.
+        assert last_error is not None
+        raise last_error
+
+    def _build_draft(self, raw_response: str, document_text: str) -> StoryDraft:
+        payload = self._parse_json(raw_response)
         chapters = [
             self._build_chapter(raw_chapter, index, document_text)
             for index, raw_chapter in enumerate(payload.get("chapters", []), start=1)
         ]
-
         return StoryDraft(summary=payload.get("summary", ""), chapters=chapters)
 
     def _parse_json(self, raw_response: str) -> dict:

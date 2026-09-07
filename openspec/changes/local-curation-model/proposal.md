@@ -34,13 +34,19 @@ about ten seconds.
 
 ## Impact
 
-**Scope is deliberately curation only.** Story-writing, platform-adaptation
-and subtitle translation keep using Anthropic. Those stages produce prose
-under strict validation — 150–220 words per chapter, no quotes absent from the
-source, mandatory visual directives, parseable JSON — and an 8B local model
-would fail those checks often enough to cost more in regeneration than it
-saves. Curation only has to score against a rubric and emit a small JSON
-verdict, which the smoke test shows is within reach.
+**Scope widened after measurement.** This began as curation-only, on the
+expectation that a small model could not satisfy story-writing's validation.
+That proved half true: `cogito` produced a 42-word chapter and `gemma4` a
+121-word one against a required 150–220. But feeding the failure back fixed
+it — the same model then produced 149, then 150 words, and passed.
+
+So all document processing (curation, story-writing, platform-adaptation) can
+run locally, provided generation retries with the validation error included in
+the retry prompt. The constraint is not relaxed to accommodate the model; the
+model is asked again, told what was wrong.
+
+Expect lower prose quality and roughly 2x latency versus the cloud model, in
+exchange for zero API cost and no dependency on credit balance.
 
 **New files:**
 - `src/editorial/infrastructure/llm/ollama_llm_client.py`

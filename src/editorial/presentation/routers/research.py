@@ -21,7 +21,6 @@ from src.editorial.application.platform_adaptation_use_case import (
 )
 from src.editorial.application.research_agent_use_case import ResearchAgentUseCase
 from src.editorial.application.story_writing_use_case import StoryWritingUseCase
-from src.editorial.infrastructure.llm.anthropic_llm_client import AnthropicLLMClient
 from src.editorial.infrastructure.persistence.discovered_documents_repo import (
     count_checkpoints_by_status,
 )
@@ -34,8 +33,7 @@ from src.editorial.infrastructure.scraping.firecrawl_scraper import (
 from src.editorial.infrastructure.scraping.jina_scraper import JinaScraperAdapter
 from src.editorial.core.ports import ILLMClient
 from src.editorial.presentation.dependencies import (
-    get_curation_llm_client,
-    get_llm_client,
+    get_document_llm_client,
     get_memory_store,
 )
 
@@ -90,21 +88,21 @@ def get_research_agent(
 
 def get_case_curation(
     memory_store: ProjectMemoryStore = Depends(get_memory_store),
-    llm_client: ILLMClient = Depends(get_curation_llm_client),
+    llm_client: ILLMClient = Depends(get_document_llm_client),
 ) -> CaseCurationUseCase:
-    """Curation alone resolves its LLM through the curation-specific provider,
-    which configuration may point at a local model."""
+    """Resolves its LLM through the document-processing provider, which
+    configuration may point at a local model."""
     return CaseCurationUseCase(llm_client=llm_client, memory_store=memory_store)
 
 
 def get_story_writing_use_case(
-    llm_client: AnthropicLLMClient = Depends(get_llm_client),
+    llm_client: ILLMClient = Depends(get_document_llm_client),
 ) -> StoryWritingUseCase:
     return StoryWritingUseCase(llm_client=llm_client)
 
 
 def get_platform_adaptation_use_case(
-    llm_client: AnthropicLLMClient = Depends(get_llm_client),
+    llm_client: ILLMClient = Depends(get_document_llm_client),
 ) -> PlatformAdaptationUseCase:
     return PlatformAdaptationUseCase(llm_client=llm_client)
 
