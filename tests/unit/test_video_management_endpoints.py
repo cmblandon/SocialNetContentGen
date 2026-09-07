@@ -764,3 +764,62 @@ def test_metrics_counts_recent_activity_as_an_api_usage_proxy(
 
     assert metrics["total_attempts"] == 2
     assert metrics["generations_last_24h"] == 1
+
+
+# --- schema/ORM agreement (1.8) ---------------------------------------------
+
+
+def test_status_server_default_round_trips_through_the_orm(test_engine):
+    """
+    Regression: SQLAlchemy persists enum *names* (PENDING), but migration 0004
+    declared the column default as the enum *value* (pending). A row inserted
+    outside the ORM would then be unreadable through it.
+
+    Inserts with raw SQL, omitting status so the server default applies, and
+    reads it back through the ORM.
+    """
+    from sqlalchemy import text
+
+    chapter_id = _seed_chapter(test_engine)
+
+    with Session(test_engine) as session:
+        platform_version = (
+            session.query(PlatformVersion)
+            .filter_by(chapter_id=chapter_id, platform=PlatformName.TIKTOK)
+            .one()
+        )
+        session.execute(
+            text(
+                "INSERT INTO video_generations "
+                "(id, platform_version_id, language, created_at) "
+                "VALUES (:id, :pv, 'es', :now)"
+            ),
+            {
+                "id": "raw-insert-1",
+                "pv": platform_version.id,
+                "now": datetime.now(timezone.utc),
+            },
+        )
+        session.commit()
+
+    with Session(test_engine) as session:
+        record = session.get(VideoGeneration, "raw-insert-1")
+        assert record is not None
+        # Would raise LookupError before the default was aligned.
+        assert record.status == VideoGenerationStatus.PENDING
+
+
+def test_orm_written_status_matches_what_the_column_stores(test_engine):
+    """The ORM's own writes and the column's default must agree on the form."""
+    from sqlalchemy import text
+
+    chapter_id = _seed_chapter(test_engine)
+    video_id = _add_video(test_engine, chapter_id, status=VideoGenerationStatus.PENDING)
+
+    with Session(test_engine) as session:
+        stored = session.execute(
+            text("SELECT status FROM video_generations WHERE id = :id"),
+            {"id": video_id},
+        ).scalar_one()
+
+    assert stored == "PENDING"

@@ -245,7 +245,14 @@ class VideoGeneration(Base):
     video_file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     subtitle_file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     status: Mapped[VideoGenerationStatus] = mapped_column(
-        SAEnum(VideoGenerationStatus), nullable=False, default=VideoGenerationStatus.PENDING
+        SAEnum(VideoGenerationStatus),
+        nullable=False,
+        default=VideoGenerationStatus.PENDING,
+        # Declared here as well as in the migration so `create_all` (which
+        # builds the test schema) and Alembic (which builds production) agree.
+        # SAEnum persists the enum *name*, so the default must be the name —
+        # the value ("pending") would be unreadable back through the ORM.
+        server_default=VideoGenerationStatus.PENDING.name,
     )
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     retry_of_id: Mapped[Optional[str]] = mapped_column(

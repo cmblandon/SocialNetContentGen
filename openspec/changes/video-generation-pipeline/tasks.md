@@ -7,6 +7,7 @@
 - [x] 1.5 Create Alembic migration for `VideoGeneration.deleted_at` (soft delete — `retry_of_id` is a self-referential FK with no cascade, so a hard delete would break the retry lineage the audit trail requires)
 - [x] 1.6 Add `deleted_at` field to `VideoGeneration` SQLAlchemy model and exclude soft-deleted rows from listings
 - [x] 1.7 Run migrations locally and verify schema
+- [x] 1.8 Align `video_generations.status` server default with the persisted form: SQLAlchemy's `SAEnum` stores enum *names* (`PENDING`), but migration 0004 declared the column's default as the enum *value* (`pending`), so a row inserted outside the ORM would be unreadable through it
 
 ## 2. Backend Core: Story Writing Optimization
 
